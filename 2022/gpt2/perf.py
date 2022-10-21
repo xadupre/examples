@@ -250,5 +250,4 @@ def main(epochs=10, n_obs=100, scenario=None):
 if __name__ == "__main__":
     import fire
 
-    fire.Fire(dict(train=main))
-
+    fire.Fire(main)
