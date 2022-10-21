@@ -56,20 +56,6 @@ def startup():
     model = GPT2Model.from_pretrained("gpt2")
     print("[start-run-tokenizer]", return_time())
 
-    if not os.path.exists("gpt2.onnx"):
-        print("[start-convert-onnx]", return_time())
-        torch.onnx.export(
-            model,
-            input_ids_1,
-            "gpt2.onnx",
-            verbose=False,
-            input_names=["X"],
-            output_names=["Y"],
-            # example_outputs=outputs,
-            opset_version=15,
-            dynamic_axes={"X": [0, 1, 2]},
-        )
-
     print("[start-done]", return_time())
     name = "encoded_tensors.pkl"
     if not os.path.exists(name):
@@ -92,6 +78,20 @@ def startup():
         with open(name, "rb") as f:
             [encoded_tensors, labels] = pickle.load(f)
     print("[start-done]", len(encoded_tensors), return_time())
+
+    if not os.path.exists("gpt2.onnx"):
+        print("[start-convert-onnx]", return_time())
+        torch.onnx.export(
+            model,
+            encoded_tensors[0],
+            "gpt2.onnx",
+            verbose=False,
+            input_names=["X"],
+            output_names=["Y"],
+            opset_version=15,
+            dynamic_axes={"X": [0, 1]},
+        )
+        print("[start-done]", return_time())
 
     return tokenizer, model, encoded_tensors, labels, "gpt2.onnx"
 
