@@ -42,10 +42,9 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
         ds_config = {
             "zero_optimization": {
                 "allgather_bucket_size": 5e8,
+                "allgather_partitions": True,
                 "contiguous_gradients": True,
-                "offload_optimizer": {
-                    "device": "cpu",
-                },
+                # "offload_optimizer": { "device": "cpu", },
                 "overlap_comm": True,
                 "stage": 2,
             },
@@ -54,6 +53,7 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
         ds_config = {
             "zero_optimization": {
                 "allgather_bucket_size": 5e8,
+                "allgather_partitions": True,
                 "contiguous_gradients": True,
                 "offload_param": {"device": "cpu", "pin_memory": True},
                 "overlap_comm": True,
@@ -70,7 +70,7 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
         "params": {
             "betas": [0.8, 0.999],
             "eps": 1e-8,
-            "lr": 0.001,
+            "lr": 0.0001,
             "weight_decay": 3e-7,
         },
     }
@@ -78,6 +78,7 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
     ds_config.update(
         {
             "gradient_accumulation_steps": 1,
+            # "gradient_clipping": 1.0,
             "optimizer": optimizer_config,
             "train_micro_batch_size_per_gpu": 1,
             "train_batch_size": WORLD_SIZE,
@@ -88,7 +89,13 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
         ds_config.update(
             {
                 "bf16": {"enabled": False},
-                "fp16": {"enabled": True},
+                "fp16": {
+                    "enabled": True,
+                    "loss_scale": 0,
+                    "loss_scale_window": 1000,
+                    "hysteresis": 2,
+                    "min_loss_scale": 1
+                },
             }
         )
     elif "-b16" in scenario_full:
@@ -257,7 +264,7 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
         labels.shape,
     )
     criterion = CustomLoss(
-        torch.Tensor([1e-4]).to(device), torch.Tensor([1e-4]).to(device)
+        torch.Tensor([1e-4]).to(device), torch.Tensor([1]).to(device)
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
     train_batch_size = 1
@@ -357,7 +364,7 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
             )  # batch_loss.backward() or model.backward(batch_loss) for deepspeed
 
             object_step.step()  # optimizer.step() or model.step() for deepspeed
-            if getattr(optimizer, "overflow", False):  # only for Zero
+            if False and getattr(optimizer, "overflow", False):  # only for Zero
                 lo = batch_loss.detach().float()
                 raise RuntimeError(
                     f"Overflow after step(), offload={optimizer.cpu_offload}, "
@@ -401,9 +408,9 @@ def main(epochs=10, n_obs=100, scenario="ds1"):
       details=[5.551999910996528, 5.556793335999828, 5.55558459898748, 5.562688290010556, 5.553183950003586, 5.542683186009526, 5.560743605994503, 5.565259896990028, 5.562582682003267, 5.5682144919992425]
     * epochs=10, n_obs=100, scenario='ds0', average=5.75481926240027,
       details=[5.735581899993122, 5.819239084026776, 5.7707890839956235, 5.75322976699681, 5.737118029996054, 5.7314762890164275, 5.737127778003924, 5.7447630599781405, 5.746277269005077, 5.772590362990741]
-    * epochs=10, n_obs=100, scenario='ds1', failure in `optimizer.step()`,
-      (in stage_1_and_2.py", line 1870, self.averaged_gradients[i], key 0 does not exist)
-      # see https://stackoverflow.com/questions/71341239/deepspeed-optimizer-problems
+    * epochs=10, n_obs=100, scenario='ds1', average=8.96984206599991,
+      after disabling check_overflow https://github.com/microsoft/DeepSpeed/blob/master/deepspeed/runtime/zero/stage_1_and_2.py#L1753
+      details=[8.972679587999664, 8.954322099999445, 8.997046710000177, 8.964849541999683, 8.973226385000089, 8.94784984800026, 8.957941382999707, 8.954076443000304, 8.988149599999815, 8.988279060999957]
 
     Building instructions:
 

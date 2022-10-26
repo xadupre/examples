@@ -1,0 +1,4 @@
+*.onnx
+*.svg
+*.html
+*.pkl
