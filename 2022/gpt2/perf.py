@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import pickle
+import pprint
 import time
 import sys
 import numpy as np
@@ -18,13 +19,18 @@ WORLD_SIZE = int(os.getenv("WORLD_SIZE", "1"))
 _origin = time.perf_counter()
 
 
-def get_deepspeed_config(scenario_full, train_batch_size=1):
+def get_deepspeed_config(scenario_full, train_batch_size=10):
+    gradient_acc_step = 1
+    micro_batch_per_gpu = train_batch_size // (gradient_acc_step * WORLD_SIZE)
+    if micro_batch_per_gpu * gradient_acc_step * WORLD_SIZE != train_batch_size:
+        micro_batch_per_gpu += 1
+        train_batch_size = micro_batch_per_gpu * gradient_acc_step * WORLD_SIZE
     scenario = scenario_full.split("-")[0]
     if scenario == "ds0":
         ds_config = {
             "zero_optimization": {
                 "allgather_bucket_size": 5e8,
-                "contiguous_gradients": True,
+                "contiguous_gradients": False,
                 "stage": 0,
                 "overlap_comm": True,
             },
@@ -32,41 +38,49 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
     elif scenario == "ds1":
         ds_config = {
             "zero_optimization": {
-                "allgather_bucket_size": 5e8,
-                "contiguous_gradients": True,
-                "stage": 1,
+                "allgather_bucket_size": 2e8,
+                "allgather_partitions": True,
+                "contiguous_gradients": False,
                 "overlap_comm": True,
+                "reduce_bucket_size": 2e8,
+                "reduce_scatter": True,
+                "stage": 1,
             },
+            "zero_allow_untested_optimizer": True,
         }
     elif scenario == "ds2":
         ds_config = {
             "zero_optimization": {
-                "allgather_bucket_size": 5e8,
+                "allgather_bucket_size": 2e8,
                 "allgather_partitions": True,
-                "contiguous_gradients": True,
+                "contiguous_gradients": False,
                 # "offload_optimizer": { "device": "cpu", },
+                "reduce_bucket_size": 2e8,
+                "reduce_scatter": True,
                 "overlap_comm": True,
                 "stage": 2,
             },
+            "zero_allow_untested_optimizer": True,
         }
     elif scenario == "ds3":
         ds_config = {
             "zero_optimization": {
-                "allgather_bucket_size": 5e8,
+                "allgather_bucket_size": 2e8,
                 "allgather_partitions": True,
-                "contiguous_gradients": True,
+                "contiguous_gradients": False,
                 "offload_param": {"device": "cpu", "pin_memory": True},
                 "overlap_comm": True,
-                "reduce_bucket_size": 5e8,
+                "reduce_bucket_size": 2e8,
                 "reduce_scatter": True,
                 "stage": 3,
             },
+            "zero_allow_untested_optimizer": True,
         }
     else:
         raise ValueError(f"Unknwon scenario {scenario!r}.")
 
     optimizer_config = {
-        "type": "Adam",
+        "type": "AdamW",
         "params": {
             "betas": [0.8, 0.999],
             "eps": 1e-8,
@@ -75,13 +89,22 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
         },
     }
 
+    scheduler_config = {
+        "type": "WarmupLR",
+        "params": {
+            "warmup_min_lr": "auto",
+            "warmup_max_lr": "auto",
+            "warmup_num_steps": "auto",
+        },
+    }
+
     ds_config.update(
         {
-            "gradient_accumulation_steps": 1,
             # "gradient_clipping": 1.0,
+            "micro_batch_per_gpu": micro_batch_per_gpu,
             "optimizer": optimizer_config,
-            "train_micro_batch_size_per_gpu": 1,
-            "train_batch_size": WORLD_SIZE,
+            # "scheduler": scheduler_config,
+            "train_batch_size": train_batch_size,
             "wall_clock_breakdown": False,
         }
     )
@@ -92,9 +115,7 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
                 "fp16": {
                     "enabled": True,
                     "loss_scale": 0,
-                    "loss_scale_window": 1000,
-                    "hysteresis": 2,
-                    "min_loss_scale": 1
+                    "min_loss_scale": 0,
                 },
             }
         )
@@ -112,6 +133,7 @@ def get_deepspeed_config(scenario_full, train_batch_size=1):
                 "fp16": {"enabled": False},
             }
         )
+
     return ds_config
 
 
@@ -149,19 +171,19 @@ def get_data_loader_train(batch_size, context_length=512):
     return data_loader
 
 
-def startup(local_rank=-1):
+def startup(model_name, local_rank=-1):
     print(f"[{local_rank}-start]")
-    # print(f"[{local_rank}-start-load-datasets]", return_time())
-    # data = load_dataset("wikitext", "wikitext-2-raw-v1")
-    print(f"[{local_rank}-start-load-tokenizer]", return_time())
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     print(f"[{local_rank}-start-load-model]", return_time())
-    model = GPT2Model.from_pretrained("gpt2")
+    model = GPT2Model.from_pretrained(model_name)
     print(f"[{local_rank}-start-run-tokenizer]", return_time())
 
     print(f"[{local_rank}-start-done]", return_time())
-    name = "encoded_tensors.pkl"
+    name = f"encoded_tensors-{model_name}.pkl"
     if not os.path.exists(name):
+        # print(f"[{local_rank}-start-load-datasets]", return_time())
+        # data = load_dataset("wikitext", "wikitext-2-raw-v1")
+        print(f"[{local_rank}-start-load-tokenizer]", return_time())
+        tokenizer = GPT2Tokenizer.from_pretrained(model_name)
         print(f"[{local_rank}-start-loading-data]", return_time())
         df = pandas.read_csv("data/train.csv")
         print(f"[{local_rank}-start-done]", df.shape, df.columns, return_time())
@@ -169,25 +191,31 @@ def startup(local_rank=-1):
         model_input = df.text
         encoded_tensors = []
         for t in tqdm(model_input):
-            tens = torch.tensor([tokenizer.encode(t, add_special_tokens=True)])
-            if tens.shape[-1] > 1024:
-                tens = tens[:, :1024]
-            encoded_tensors.append(tens)
-        print(f"[{local_rank}-start-pickle]", len(encoded_tensors), return_time())
+            # tens = torch.tensor([tokenizer.encode(t, add_special_tokens=True)])
+            encoded_input = tokenizer(t, return_tensors="pt")
+            for k in encoded_input:
+                tens = encoded_input[k]
+                if tens.shape[-1] > 1024:
+                    tens = tens[:, :1024]
+                    encoded_input[k] = tens
+            encoded_tensors.append(encoded_input)
+        print(f"[{local_rank}-start-pickle]", len(encoded_tensors), return_time(), name)
         with open(name, "wb") as f:
             pickle.dump([encoded_tensors, labels], f)
     else:
-        print(f"[{local_rank}-start-unpickle]", return_time())
+        print(f"[{local_rank}-start-unpickle]", return_time(), name)
         with open(name, "rb") as f:
             [encoded_tensors, labels] = pickle.load(f)
     print(f"[{local_rank}-start-done]", len(encoded_tensors), return_time())
 
-    if not os.path.exists("gpt2.onnx"):
+    if not os.path.exists(f"onnx/{model_name}.onnx"):
+        if not os.path.exists("onnx"):
+            os.mkdir("onnx")
         print(f"[{local_rank}-start-convert-onnx]", return_time())
         torch.onnx.export(
             model,
             encoded_tensors[0],
-            "gpt2.onnx",
+            f"onnx/{model_name}.onnx",
             verbose=False,
             input_names=["X"],
             output_names=["Y"],
@@ -196,14 +224,15 @@ def startup(local_rank=-1):
         )
         print(f"[{local_rank}-start-done]", return_time())
 
-    return tokenizer, model, encoded_tensors, labels, "gpt2.onnx"
+    return model, encoded_tensors, labels, f"onnx/{model_name}.onnx"
 
 
 class GPT2Classifier(torch.nn.Module):
-    def __init__(self, model, num_classes: int):
+    def __init__(self, model, input_dim: int, num_classes: int):
         super(GPT2Classifier, self).__init__()
+        # input_dim: 768 or 1280
         self.gpt2model = model
-        self.fc1 = torch.nn.Linear(768, num_classes)
+        self.fc1 = torch.nn.Linear(input_dim, num_classes)
 
     def forward(self, x):
         gpt_out = self.gpt2model(x)
@@ -245,13 +274,35 @@ class CustomLoss(torch.nn.L1Loss):
         return res * self.cst2
 
 
-def train(model, epochs, encoded_tensors, labels, device, scenario=None):
+def train(
+    model,
+    model_name,
+    epochs,
+    encoded_tensors,
+    labels,
+    device,
+    scenario=None,
+    train_batch_size=10,
+):
+    if scenario is not None and scenario.lower().startswith("ort-"):
+        scenario = scenario[4:]
+        use_ort = True
+    else:
+        use_ort = scenario.lower() == "ort"
+        if use_ort:
+            scenario = "torch"
     local_rank = 0
+    print(f"[{local_rank}-train-scenario] {scenario} model_name={model_name!r}")
     print(f"[{local_rank}-train-device]", device, len(encoded_tensors))
     print(f"[{local_rank}-train-model-gpu]", return_time())
     # print(f"[{local_rank}-train-rank]", torch.distributed.get_rank())
-    model = GPT2Classifier(model, 5)
-    model = model.to(device)
+    if model_name == "gpt2":
+        input_dim = 768
+    elif model_name == "gpt2-large":
+        input_dim = 1280
+    else:
+        raise ValueError(f"Unexpected model name {model_name!r}.")
+    model = GPT2Classifier(model, input_dim, 5)
     print(f"[{local_rank}-train-dataset]", return_time())
     ds = CustomDataset(
         encoded_tensors, labels.reshape((-1, 1, 5)).to(torch.float32), device, -1
@@ -260,20 +311,26 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
     print(
         f"[{local_rank}-train-done]",
         return_time(),
-        encoded_tensors[0].shape,
+        type(encoded_tensors[0]),
         labels.shape,
     )
     criterion = CustomLoss(
         torch.Tensor([1e-4]).to(device), torch.Tensor([1]).to(device)
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
-    train_batch_size = 1
 
     logger = logging.getLogger("DeepSpeed")
     logger.setLevel(logging.WARNING)
 
     print(f"[{local_rank}-train-done]", return_time())
     times = []
+
+    if use_ort:
+        from onnxruntime.training.ortmodule import ORTModule
+
+        print(f"[{local_rank}-train-ORTModule]", return_time())
+        model = ORTModule(model)
+        print(f"[{local_rank}-train-done]", return_time())
 
     if scenario.lower() in {
         "ds0",
@@ -293,6 +350,8 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
 
         # deepspeed.init_distributed()
         ds_config = get_deepspeed_config(scenario, train_batch_size)
+        train_batch_size = ds_config["train_batch_size"]
+        pprint.pprint(ds_config)
         dschf = HfDeepSpeedConfig(ds_config)
         model, optimizer, _, __ = deepspeed.initialize(
             config_params=ds_config,
@@ -309,15 +368,8 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
         print(
             f"[{local_rank}-train-deepspeed] custom_loss_scaler={getattr(optimizer, 'custom_loss_scaler', None)}"
         )
-    elif scenario.lower() == "ort":
-        from onnxruntime.training.ortmodule import ORTModule
-
-        print(f"[{local_rank}-train-ORTModule]", return_time())
-        model = ORTModule(model)
-        print(f"[{local_rank}-train-done]", return_time())
-        object_step = optimizer
-        f_backward = lambda model, loss: loss.backward()
     elif scenario.lower() == "torch":
+        model = model.to(device)
         object_step = optimizer
         f_backward = lambda model, loss: loss.backward()
     else:
@@ -327,6 +379,7 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
     print(f"[{local_rank}-train-type] {type(model)}")
     print(f"[{local_rank}-train-type] {type(optimizer)}")
     print(f"[{local_rank}-train-type] {type(criterion)}")
+    model.train()
     if False:
         for k, v in sorted(model.__dict__.items()):
             if v is not None:
@@ -348,13 +401,13 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
     for epoch_num in tqdm(range(epochs + 1)):
         total_loss_train = 0
         begin = time.perf_counter()
-        model.train()
+
+        object_step.zero_grad()
 
         for i, (x, y) in enumerate(my_dataloader):
 
-            model.zero_grad()
             # optimizer.zero_grad()
-            output = model(x)
+            output = model(x["input_ids"])
 
             batch_loss = criterion(output, y.to(output.dtype))
             total_loss_train += batch_loss.to(float).item()
@@ -363,7 +416,10 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
                 model, batch_loss
             )  # batch_loss.backward() or model.backward(batch_loss) for deepspeed
 
-            object_step.step()  # optimizer.step() or model.step() for deepspeed
+            if i % train_batch_size == train_batch_size - 1:
+                object_step.step()  # optimizer.step() or model.step() for deepspeed
+                object_step.zero_grad()
+
             if False and getattr(optimizer, "overflow", False):  # only for Zero
                 lo = batch_loss.detach().float()
                 raise RuntimeError(
@@ -381,7 +437,7 @@ def train(model, epochs, encoded_tensors, labels, device, scenario=None):
     return times
 
 
-def main(epochs=10, n_obs=100, scenario="ds1"):
+def main(epochs=10, n_obs=100, scenario="ds2", train_batch_size=10, model_name="gpt2"):
     """
     Trains a dummy model based on GPT-2. The model has no real meaning
     but to measure the training of a GPT-2 model.
@@ -390,6 +446,8 @@ def main(epochs=10, n_obs=100, scenario="ds1"):
         first one is not included in the average time
     :param n_obs: number of observations in the training set
     :param scenario: training to measure. See below.
+    :param train_batch_size: training batch size
+    :param model_name: model name `gpt2`, `gpt2-large`
 
     About scenario:
 
@@ -400,19 +458,7 @@ def main(epochs=10, n_obs=100, scenario="ds1"):
     * `'ds2'`: pytorch + deepspeed stage zero 2
     * `'ds3'`: pytorch + deepspeed stage zero 3
 
-    Measures:
-
-    * epochs=10, n_obs=100, scenario=torch, average=6.512568323302548,
-      details=[6.761976952009718, 6.499132192999241, 6.414225077009178, 6.695275236997986, 6.624779493009555, 6.6113296980038285, 6.447838849009713, 6.350545073000831, 6.364595259990892, 6.355985400994541]
-    * epochs=10, n_obs=100, scenario='prt', average=5.557973394899454,
-      details=[5.551999910996528, 5.556793335999828, 5.55558459898748, 5.562688290010556, 5.553183950003586, 5.542683186009526, 5.560743605994503, 5.565259896990028, 5.562582682003267, 5.5682144919992425]
-    * epochs=10, n_obs=100, scenario='ds0', average=5.75481926240027,
-      details=[5.735581899993122, 5.819239084026776, 5.7707890839956235, 5.75322976699681, 5.737118029996054, 5.7314762890164275, 5.737127778003924, 5.7447630599781405, 5.746277269005077, 5.772590362990741]
-    * epochs=10, n_obs=100, scenario='ds1', average=8.96984206599991,
-      after disabling check_overflow https://github.com/microsoft/DeepSpeed/blob/master/deepspeed/runtime/zero/stage_1_and_2.py#L1753
-      details=[8.972679587999664, 8.954322099999445, 8.997046710000177, 8.964849541999683, 8.973226385000089, 8.94784984800026, 8.957941382999707, 8.954076443000304, 8.988149599999815, 8.988279060999957]
-
-    Building instructions:
+    Building instructions for onnxruntime:
 
     ::
 
@@ -441,30 +487,56 @@ def main(epochs=10, n_obs=100, scenario="ds1"):
     print(
         f"[{local_rank}-train] get_device_properties(...)={torch.cuda.get_device_properties(torch.device('cuda'))}"
     )
-    print(f"[{local_rank}-train] epochs={epochs}, n_obs={n_obs}, scenario={scenario!r}")
-    tokenizer, model, encoded_tensors, labels, model_name = startup()
+    print(
+        f"[{local_rank}-train] epochs={epochs}, n_obs={n_obs}, scenario={scenario!r}, model_name={model_name!r}"
+    )
+    model, encoded_tensors, labels, model_name = startup(model_name)
 
     epochs = 10
     print()
     print(f"[{local_rank}-train]", return_time())
     device = torch.device("cuda:%d" % max(local_rank, 0))
     times = train(
-        model, epochs, encoded_tensors[:n_obs], labels, device, scenario=scenario
+        model,
+        os.path.splitext(os.path.split(model_name)[-1])[0],
+        epochs,
+        encoded_tensors[:n_obs],
+        labels,
+        device,
+        scenario=scenario,
+        train_batch_size=train_batch_size,
     )
     print("[times]", sum(times) / len(times), times)
     print("[done]", return_time())
 
 
-def _main(cmd_args):
+def _main_deepspeed(config_name, model_name, cmd_args):
     logger = logging.getLogger("DeepSpeed")
     logger.setLevel(logging.WARNING)
 
-    ds_config = get_deepspeed_config("ds1")
+    if model_name == "gpt2":
+        input_dim = 768
+    elif model_name == "gpt2-large":
+        input_dim = 1280
+    else:
+        raise ValueError(f"Unexpected model name {model_name!r}.")
+
+    ds_config = get_deepspeed_config(config_name)
     dschf = HfDeepSpeedConfig(ds_config)
-    tokenizer, model, encoded_tensors, labels, model_name = startup(cmd_args.local_rank)
-    model = GPT2Classifier(model, 5)
+    train_batch_size = ds_config["train_batch_size"]
+    if train_batch_size <= 1:
+        raise ValueError(
+            f"train_batch_size={train_batch_size} must be > 1\n{pprint.pformat(ds_config)}"
+        )
+
+    torch.cuda.set_device(cmd_args.local_rank)
+    deepspeed.init_distributed()
+
+    model, encoded_tensors, labels, model_name = startup(
+        model_name, cmd_args.local_rank
+    )
+    model = GPT2Classifier(model, input_dim, 5)
     device = torch.device("cuda:%d" % cmd_args.local_rank)
-    model = model.to(device)
     ds = CustomDataset(
         encoded_tensors,
         labels.reshape((-1, 1, 5)).to(torch.float32),
@@ -472,7 +544,9 @@ def _main(cmd_args):
         cmd_args.local_rank,
     )
     my_dataloader = DataLoader(ds)
-    criterion = CustomLoss(torch.Tensor([1e-4]).to(device))
+    criterion = CustomLoss(
+        torch.Tensor([1e-4]).to(device), torch.Tensor([1]).to(device)
+    )
     model, optimizer, _, __ = deepspeed.initialize(
         args=cmd_args,
         model=model,
@@ -483,33 +557,27 @@ def _main(cmd_args):
     print(f"[{cmd_args.local_rank}-trainds] {type(model)}")
     print(f"[{cmd_args.local_rank}-trainds] {type(optimizer)}")
     times = []
+    # model.train()
 
     for epoch_num in tqdm(range(10 + 1)):
         total_loss_train = 0
         begin = time.perf_counter()
-        model.train()
+
+        model.zero_grad()
 
         for i, (x, y) in enumerate(my_dataloader):
 
-            model.zero_grad()
             # optimizer.zero_grad()
-            output = model(x)
+            output = model(x["input_ids"])
 
             batch_loss = criterion(output, y.to(output.dtype))
             total_loss_train += batch_loss.to(float).item()
 
             model.backward(batch_loss)
-            model.step()
 
-            if getattr(optimizer, "overflow", False):  # only for Zero
-                lo = batch_loss.detach().float()
-                raise RuntimeError(
-                    f"Overflow after step(), offload={optimizer.cpu_offload}, "
-                    f"len(optimizer.bit16_groups)={len(optimizer.bit16_groups)}, "
-                    f"len(optimizer.averaged_gradients)={len(optimizer.averaged_gradients)}, "
-                    f"partition_gradients={optimizer.partition_gradients}, "
-                    f"loss={lo!r}, total_loss_train={total_loss_train!r}, i={i}"
-                )
+            if i % train_batch_size == train_batch_size - 1:
+                model.step()
+                model.zero_grad()
 
         end = time.perf_counter() - begin
         if epoch_num > 0:
@@ -521,6 +589,7 @@ def _main(cmd_args):
 
 
 if __name__ == "__main__":
+    # nvitop -m
     if any(map(lambda x: x.startswith("--local_rank"), sys.argv)):
         parser = argparse.ArgumentParser(description="My training script.")
         parser.add_argument(
@@ -532,8 +601,9 @@ if __name__ == "__main__":
         # Include DeepSpeed configuration arguments
         parser = deepspeed.add_config_arguments(parser)
         cmd_args = parser.parse_args()
-        print(f"[WORLD_SIZE={WORLD_SIZE}-LOCAL_RANK={cmd_args.local_rank}]")
-        _main(cmd_args)
+        print(f"[WORLD_SIZE={WORLD_SIZE},LOCAL_RANK={cmd_args.local_rank}]")
+        print(cmd_args)
+        _main_deepspeed("ds3", "gpt2", cmd_args)
     elif any(map(lambda x: x.startswith("--scenario"), sys.argv)):
         print(f"[WORLD_SIZE={WORLD_SIZE}]")
         import fire
