@@ -112,6 +112,7 @@ def _main_deepspeed(model_name, cmd_args):
     # onnxruntime
     if True:
         from onnxruntime.training.ortmodule import ORTModule
+
         model = ORTModule(model)
         # one iteration to initialize the module
         print("INITIALIZATION ORT BEGIN")
@@ -142,6 +143,12 @@ def _main_deepspeed(model_name, cmd_args):
         # config_params=ds_config,
         # optimizer=optimizer,
     )
+
+    if False:
+        from onnxruntime.training.ortmodule import ORTModule
+
+        model = ORTModule(model)
+
     print(
         f"[{WORLD_SIZE}({cmd_args.local_rank})-trainds] N={len(my_dataloader)}, {type(model)}, {type(optimizer)}"
     )
@@ -180,9 +187,7 @@ def _main_deepspeed(model_name, cmd_args):
             break
 
     end = time.perf_counter() - begin
-    print(
-        f"END local_rank={cmd_args.local_rank}/{WORLD_SIZE}, time={end}, N={i}"
-    )
+    print(f"END local_rank={cmd_args.local_rank}/{WORLD_SIZE}, time={end}, N={i}")
 
 
 # nvitop -m
