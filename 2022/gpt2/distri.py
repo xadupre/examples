@@ -1,3 +1,9 @@
+"""
+::
+
+    deepspeed --num_gpu=4  distri.py --deepspeed --deepspeed_config last_config.json
+
+"""
 import argparse
 import json
 import logging
@@ -58,7 +64,7 @@ class CustomDataset(Dataset):
 
 def _main_deepspeed(model_name, cmd_args):
     logger = logging.getLogger("DeepSpeed")
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.WARNING)
 
     if model_name == "gpt2":
         input_dim = 768
@@ -98,14 +104,36 @@ def _main_deepspeed(model_name, cmd_args):
     labels = labels.reshape((-1, 1, 5)).to(torch.float32)
     model = GPT2Loss(model, input_dim, 5)
 
-    # onnxruntime
-    # from onnxruntime.training.ortmodule import ORTModule
-    # model = ORTModule(model)
-
     # data
     device = torch.device("cuda:%d" % local_rank)
     ds = CustomDataset(encoded_tensors, labels, device, local_rank)
     my_dataloader = DataLoader(ds)
+
+    # onnxruntime
+    if True:
+        from onnxruntime.training.ortmodule import ORTModule
+
+        model = ORTModule(model)
+        # one iteration to initialize the module
+        print("INITIALIZATION ORT BEGIN")
+        for x, y in my_dataloader:
+            # it cannot run on GPU since the model may not hold in CPU memory
+            batch_loss = model(x["input_ids"].to("cpu"), y.to("cpu"))
+            break
+        print("INITIALIZATION ORT DONE")
+        # It works but it fails later during training. It seems that DLPack protocol is used by onnxruntime
+        # to get some data and it tries to delete the tensor but fails (maybe the destructor is null,
+        # maybe the tensor should remain). Stage 3 is expected to keep ownership.
+        # 2022-11-08 15:10:48.214031399 [E:onnxruntime:, orttraining_partial_executor.cc:368 Execute] Non-zero status code returned while running ATen node. Name:'/_original_module/gpt2model/wpe/ATen' Status Message: The specified pointer resides on host memory and is not registered with any CUDA device.
+        # Exception raised from getDeviceFromPtr at ../aten/src/ATen/cuda/CUDADevice.h:17 (most recent call first):
+        # frame #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x3e (0x7fd05c06a86e in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libc10.so)
+        # frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x60 (0x7fd05c035469 in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libc10.so)
+        # frame #2: <unknown function> + 0x16054f (0x7fcff92c854f in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libtorch_cuda_cpp.so)
+        # frame #3: at::TensorMaker::make_tensor() + 0xa30 (0x7fcfe04ce790 in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so)
+        # frame #4: at::fromDLPack(DLManagedTensor const*) + 0x696 (0x7fcfdfa39e36 in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so)
+        # frame #5: ATenOperator::ToIValueArgument(DLManagedTensor const*, unsigned long) const + 0x9c (0x7fcf7c068bac in /home/xadupre/github/onnxruntime/build/linux_cuda/Release/onnxruntime/training/ortmodule/torch_cpp_extensions/aten_op_executor.cpython-38-x86_64-linux-gnu.so)
+        # frame #6: ExecuteATenOperator(char const*, char const*, unsigned long, DLManagedTensor**, unsigned long, DLManagedTensor**) + 0x135 (0x7fcf7c0623e5 in /home/xadupre/github/onnxruntime/build/linux_cuda/Release/onnxruntime/training/ortmodule/torch_cpp_extensions/aten_op_executor.cpython-38-x86_64-linux-gnu.so)
+        # frame #7: <unknown function> + 0x8fdbee (0x7fcfa1618bee in /home/xadupre/github/onnxruntime/build/linux_cuda/Release/onnxruntime/capi/onnxruntime_pybind11_
 
     # deepspeed initialization
     model, optimizer, _, __ = deepspeed.initialize(
@@ -115,8 +143,14 @@ def _main_deepspeed(model_name, cmd_args):
         # config_params=ds_config,
         # optimizer=optimizer,
     )
+
+    if False:
+        from onnxruntime.training.ortmodule import ORTModule
+
+        model = ORTModule(model)
+
     print(
-        f"[{WORLD_SIZE}({cmd_args.local_rank})-trainds] {type(model)}, {type(optimizer)}"
+        f"[{WORLD_SIZE}({cmd_args.local_rank})-trainds] N={len(my_dataloader)}, {type(model)}, {type(optimizer)}"
     )
     print(
         f"[{WORLD_SIZE}({cmd_args.local_rank})-partition_count] {optimizer.partition_count!r}"
@@ -136,28 +170,24 @@ def _main_deepspeed(model_name, cmd_args):
         print(f"[{cmd_args.local_rank}] --")
 
     # training
-    times = []
     model.train()
 
-    for epoch_num in range(10 + 1):
-        begin = time.perf_counter()
+    begin = time.perf_counter()
 
-        for i, (x, y) in enumerate(my_dataloader):
+    for i, (x, y) in enumerate(my_dataloader):
 
-            # optimizer.zero_grad()
-            batch_loss = model(x["input_ids"], y)
+        # optimizer.zero_grad()
+        batch_loss = model(x["input_ids"], y)
 
-            model.backward(batch_loss)
+        model.backward(batch_loss)
 
-            model.step()
+        model.step()
 
-        end = time.perf_counter() - begin
-        if epoch_num > 0:
-            times.append(end)
-        print(
-            f"local_rank={cmd_args.local_rank}/{WORLD_SIZE}, epoch_num={epoch_num}, time={end}"
-        )
-    return times
+        if i >= 2 * train_batch_size:
+            break
+
+    end = time.perf_counter() - begin
+    print(f"END local_rank={cmd_args.local_rank}/{WORLD_SIZE}, time={end}, N={i}")
 
 
 # nvitop -m
@@ -174,4 +204,4 @@ parser = deepspeed.add_config_arguments(parser)
 cmd_args = parser.parse_args()
 print(f"[WORLD_SIZE={WORLD_SIZE},LOCAL_RANK={cmd_args.local_rank}]")
 print(cmd_args)
-_main_deepspeed("gpt2-large", cmd_args)
+_main_deepspeed("gpt2", cmd_args)
