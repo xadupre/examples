@@ -126,14 +126,14 @@ def _main_deepspeed(model_name, cmd_args):
         # maybe the tensor should remain). Stage 3 is expected to keep ownership.
         # 2022-11-08 15:10:48.214031399 [E:onnxruntime:, orttraining_partial_executor.cc:368 Execute] Non-zero status code returned while running ATen node. Name:'/_original_module/gpt2model/wpe/ATen' Status Message: The specified pointer resides on host memory and is not registered with any CUDA device.
         # Exception raised from getDeviceFromPtr at ../aten/src/ATen/cuda/CUDADevice.h:17 (most recent call first):
-        # frame #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x3e (0x7fd05c06a86e in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libc10.so)
-        # frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x60 (0x7fd05c035469 in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libc10.so)
-        # frame #2: <unknown function> + 0x16054f (0x7fcff92c854f in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libtorch_cuda_cpp.so)
-        # frame #3: at::TensorMaker::make_tensor() + 0xa30 (0x7fcfe04ce790 in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so)
-        # frame #4: at::fromDLPack(DLManagedTensor const*) + 0x696 (0x7fcfdfa39e36 in /home/xadupre/.local/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so)
-        # frame #5: ATenOperator::ToIValueArgument(DLManagedTensor const*, unsigned long) const + 0x9c (0x7fcf7c068bac in /home/xadupre/github/onnxruntime/build/linux_cuda/Release/onnxruntime/training/ortmodule/torch_cpp_extensions/aten_op_executor.cpython-38-x86_64-linux-gnu.so)
-        # frame #6: ExecuteATenOperator(char const*, char const*, unsigned long, DLManagedTensor**, unsigned long, DLManagedTensor**) + 0x135 (0x7fcf7c0623e5 in /home/xadupre/github/onnxruntime/build/linux_cuda/Release/onnxruntime/training/ortmodule/torch_cpp_extensions/aten_op_executor.cpython-38-x86_64-linux-gnu.so)
-        # frame #7: <unknown function> + 0x8fdbee (0x7fcfa1618bee in /home/xadupre/github/onnxruntime/build/linux_cuda/Release/onnxruntime/capi/onnxruntime_pybind11_
+        # frame #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x3e (0x7fd05c06a86e in site-packages/torch/lib/libc10.so)
+        # frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x60 (0x7fd05c035469 in site-packages/torch/lib/libc10.so)
+        # frame #2: <unknown function> + 0x16054f (0x7fcff92c854f in site-packages/torch/lib/libtorch_cuda_cpp.so)
+        # frame #3: at::TensorMaker::make_tensor() + 0xa30 (0x7fcfe04ce790 in site-packages/torch/lib/libtorch_cpu.so)
+        # frame #4: at::fromDLPack(DLManagedTensor const*) + 0x696 (0x7fcfdfa39e36 in site-packages/torch/lib/libtorch_cpu.so)
+        # frame #5: ATenOperator::ToIValueArgument(DLManagedTensor const*, unsigned long) const + 0x9c (0x7fcf7c068bac in onnxruntime/training/ortmodule/torch_cpp_extensions/aten_op_executor.cpython-38-x86_64-linux-gnu.so)
+        # frame #6: ExecuteATenOperator(char const*, char const*, unsigned long, DLManagedTensor**, unsigned long, DLManagedTensor**) + 0x135 (0x7fcf7c0623e5 in onnxruntime/training/ortmodule/torch_cpp_extensions/aten_op_executor.cpython-38-x86_64-linux-gnu.so)
+        # frame #7: <unknown function> + 0x8fdbee (0x7fcfa1618bee in onnxruntime/capi/onnxruntime_pybind11_
 
     # deepspeed initialization
     model, optimizer, _, __ = deepspeed.initialize(
