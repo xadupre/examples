@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader, Dataset, IterableDataset, Subset, Tenso
 
 
 class CustomDataset(Dataset):
-    def __init__(self, encoded_tensors, labels, device, local_rank=-1):
+    def __init__(self, WORLD_SIZE, encoded_tensors, labels, device, local_rank=-1):
         if local_rank == -1:
             self.encoded_tensors = [e.to(device) for e in encoded_tensors]
             self.labels = labels.to(torch.float32).to(device)

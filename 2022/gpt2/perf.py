@@ -15,9 +15,10 @@ import torch
 from tqdm import tqdm
 from transformers import GPT2Model, GPT2Tokenizer
 
-from gpt2_loss import GPT2Loss
 from data_helper import CustomDataset, DataLoader
 from exp_config import get_deepspeed_config
+from exp_stats import get_stats
+from gpt2_loss import GPT2Loss
 
 warnings.simplefilter("ignore")
 
@@ -118,6 +119,7 @@ def train(
     print(f"[{local_rank}-train-dataset]")
 
     ds = CustomDataset(
+        WORLD_SIZE,
         encoded_tensors,
         labels.reshape(
             (-1, 1, 5),
@@ -235,6 +237,7 @@ def train(
                 else:
                     print(f"[{local_rank}-train] optimizer.{k}: {type(v)}")
 
+    kinds = None
     for epoch_num in tqdm(range(epochs + 1)):
         total_loss_train = 0
         begin = time.perf_counter()
@@ -272,13 +275,27 @@ def train(
                     optimizer.step()  # optimizer.step() or model.step() for deepspeed
                     optimizer.zero_grad()
 
+            if epoch_num == 1 and i == 0:
+                kinds = get_stats(local_rank, model)
+
         end = time.perf_counter() - begin
         if epoch_num > 0:
             times.append(end)
         print(
             f"epoch_num={epoch_num}, total_loss_train={total_loss_train}, time={end}",
         )
-    return times, train_batch_size, len(my_dataloader)
+    N = len(my_dataloader)
+    kinds.update(
+        dict(
+            scenario=scenario,
+            N=N,
+            train_batch_size=train_batch_size,
+            time_per_img=sum(times) / len(times) / N,
+            time_per_iter=sum(times) / len(times),
+            times=times,
+        )
+    )
+    return kinds
 
 
 def main(
@@ -329,7 +346,7 @@ def main(
                 --enable_training_torch_interop
         python3 -m torch_ort.configure
     """
-    scenario = "-".join(sorted(scenario.lower().split('-')))
+    scenario = "-".join(sorted(scenario.lower().split("-")))
     local_rank = -1
     print(
         f"[{local_rank}-train] get_device_capability()={torch.cuda.get_device_capability()}",
@@ -347,7 +364,7 @@ def main(
     print()
     print(f"[{local_rank}-train]")
     device = torch.device("cuda:%d" % max(local_rank, 0))
-    times, train_batch_size, N = train(
+    stats = train(
         model,
         os.path.splitext(os.path.split(model_name)[-1])[0],
         epochs,
@@ -357,16 +374,17 @@ def main(
         scenario=scenario,
         train_batch_size=train_batch_size,
     )
-    if not os.path.exists("results.txt"):
-        with open("results.txt", "w") as f:
-            f.write("program,scenario,N,train_batch_size,average,details\n")
-    with open("results.txt", "a") as f:
-        text = ":".join(map(str, times))
-        f.write(
-            f"perf.py,{scenario},{N},{train_batch_size},{sum(times) / len(times)},{text}\n"
-        )
+    if not os.path.exists("log"):
+        os.mkdir("log")
+
+    stats.update(dict(program="perf.py"))
+
+    with open("log/results.txt", "a") as f:
+        f.write(str(stats))
+        f.write("\n")
     print(
-        f"[times] scenario={scenario}, N={N}, train_batch_size={train_batch_size}, average={sum(times) / len(times)}, details={times}"
+        f"[times] scenario={scenario}, N={stats['N']}, train_batch_size={stats['train_batch_size']}, "
+        f"time_per_iter={stats['time_per_iter']}"
     )
     print("[done]")
 
