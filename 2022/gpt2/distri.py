@@ -98,7 +98,7 @@ def _main_deepspeed(model_name, cmd_args):
     else:
         raise ValueError(f"Unexpected model name {model_name!r}.")
     model = GPT2Model.from_pretrained(model_name)
-    name = f"encoded_tensors-{model_name}.pkl"
+    name = f"data/encoded_tensors-{model_name}.pkl"
     with open(name, "rb") as f:
         [encoded_tensors, labels] = pickle.load(f)
     labels = labels.reshape((-1, 1, 5)).to(torch.float32)
@@ -110,7 +110,7 @@ def _main_deepspeed(model_name, cmd_args):
     my_dataloader = DataLoader(ds)
 
     # onnxruntime
-    if True:
+    if "ort" in cmd_args.deepspeed_config:
         from onnxruntime.training.ortmodule import ORTModule
 
         model = ORTModule(model)
