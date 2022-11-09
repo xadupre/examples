@@ -33,11 +33,12 @@
 # python -m torch.distributed.run --nproc_per_node=2 t0.py
 
 
-from transformers import AutoTokenizer, AutoConfig, AutoModelForSeq2SeqLM
-from transformers.deepspeed import HfDeepSpeedConfig
-import deepspeed
 import os
+
+import deepspeed
 import torch
+from transformers import AutoConfig, AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers.deepspeed import HfDeepSpeedConfig
 
 os.environ[
     "TOKENIZERS_PARALLELISM"
@@ -78,27 +79,27 @@ train_batch_size = 1 * world_size
 # fmt: off
 ds_config = {
     "fp16": {
-        "enabled": False
+        "enabled": False,
     },
     "bf16": {
-        "enabled": False
+        "enabled": False,
     },
     "zero_optimization": {
         "stage": 3,
         "offload_param": {
             "device": "cpu",
-            "pin_memory": True
+            "pin_memory": True,
         },
         "overlap_comm": True,
         "contiguous_gradients": True,
         "reduce_bucket_size": model_hidden_size * model_hidden_size,
         "stage3_prefetch_bucket_size": 0.9 * model_hidden_size * model_hidden_size,
-        "stage3_param_persistence_threshold": 10 * model_hidden_size
+        "stage3_param_persistence_threshold": 10 * model_hidden_size,
     },
     "steps_per_print": 2000,
     "train_batch_size": train_batch_size,
     "train_micro_batch_size_per_gpu": 1,
-    "wall_clock_breakdown": False
+    "wall_clock_breakdown": False,
 }
 # fmt: on
 

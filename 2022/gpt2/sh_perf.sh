@@ -1,0 +1,33 @@
+python3 perf.py --scenario=torch
+python3 perf.py --scenario=torch-ort
+python3 perf.py --scenario=ds0
+python3 perf.py --scenario=ds0-ort
+python3 perf.py --scenario=ds0-f16
+python3 perf.py --scenario=ds0-f16-ort
+python3 perf.py --scenario=ds1
+python3 perf.py --scenario=ds1-f16
+python3 perf.py --scenario=ds1-f16-offload
+python3 perf.py --scenario=ds1-f16-ort
+python3 perf.py --scenario=ds1-f16-offload-ort
+python3 perf.py --scenario=ds2
+python3 perf.py --scenario=ds2-f16
+python3 perf.py --scenario=ds2-f16-offload
+python3 perf.py --scenario=ds2-f16-offload-ort
+python3 perf.py --scenario=ds3
+python3 perf.py --scenario=ds3-f16
+python3 perf.py --scenario=ds3-f16-offload
+python3 perf.py --scenario=ds2-f16-ort
+python3 perf.py --scenario=ds3-f16-ort
+python3 perf.py --scenario=ds3-f16-offload-ort
+
+python3 perf.py --scenario=ds1-ort
+python3 perf.py --scenario=ds2-ort
+
+# python3 perf.py --scenario=ds0-offload
+# python3 perf.py --scenario=ds3-ort
+python3 perf.py --scenario=ds1-offload
+python3 perf.py --scenario=ds2-offload
+python3 perf.py --scenario=ds1-offload-ort
+python3 perf.py --scenario=ds2-offload-ort
+python3 perf.py --scenario=ds3-offload-ort
+python3 perf.py --scenario=ds3-offload

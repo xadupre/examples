@@ -10,20 +10,20 @@ import logging
 import os
 import pickle
 import pprint
-import time
 import sys
+import time
 import warnings
 
 warnings.simplefilter("ignore")
 
+import deepspeed
 import numpy as np
 import pandas
-from tqdm import tqdm
-from datasets import list_datasets, load_dataset
-import deepspeed
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset, TensorDataset, IterableDataset
-from transformers import GPT2Tokenizer, GPT2Model
+from datasets import list_datasets, load_dataset
+from torch.utils.data import DataLoader, Dataset, IterableDataset, Subset, TensorDataset
+from tqdm import tqdm
+from transformers import GPT2Model, GPT2Tokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
 
 WORLD_SIZE = int(os.getenv("WORLD_SIZE", "1"))
@@ -80,11 +80,11 @@ def _main_deepspeed(model_name, cmd_args):
 
     if train_batch_size <= 1:
         raise ValueError(
-            f"train_batch_size={train_batch_size} must be > 1\n{pprint.pformat(ds_config)}"
+            f"train_batch_size={train_batch_size} must be > 1\n{pprint.pformat(ds_config)}",
         )
     if local_rank >= WORLD_SIZE or local_rank < 0:
         raise ValueError(
-            f"local_rank={local_rank} must be >= 0 and < WORLD_SIZE={WORLD_SIZE}"
+            f"local_rank={local_rank} must be >= 0 and < WORLD_SIZE={WORLD_SIZE}",
         )
 
     torch.cuda.set_device(local_rank)
@@ -115,12 +115,13 @@ def _main_deepspeed(model_name, cmd_args):
 
         model = ORTModule(model)
         # one iteration to initialize the module
-        print("INITIALIZATION ORT BEGIN")
-        for x, y in my_dataloader:
-            # it cannot run on GPU since the model may not hold in CPU memory
-            batch_loss = model(x["input_ids"].to("cpu"), y.to("cpu"))
-            break
-        print("INITIALIZATION ORT DONE")
+        if False:
+            print("INITIALIZATION ORT BEGIN")
+            for x, y in my_dataloader:
+                # it cannot run on GPU since the model may not hold in CPU memory
+                batch_loss = model(x["input_ids"].to("cpu"), y.to("cpu"))
+                break
+            print("INITIALIZATION ORT DONE")
         # It works but it fails later during training. It seems that DLPack protocol is used by onnxruntime
         # to get some data and it tries to delete the tensor but fails (maybe the destructor is null,
         # maybe the tensor should remain). Stage 3 is expected to keep ownership.
@@ -150,24 +151,29 @@ def _main_deepspeed(model_name, cmd_args):
         model = ORTModule(model)
 
     print(
-        f"[{WORLD_SIZE}({cmd_args.local_rank})-trainds] N={len(my_dataloader)}, {type(model)}, {type(optimizer)}"
+        f"[{WORLD_SIZE}({cmd_args.local_rank})-trainds] N={len(my_dataloader)}, {type(model)}, {type(optimizer)}",
     )
-    print(
-        f"[{WORLD_SIZE}({cmd_args.local_rank})-partition_count] {optimizer.partition_count!r}"
-    )
-    print(
-        f"[{WORLD_SIZE}({cmd_args.local_rank})-contiguous_gradients] {optimizer.contiguous_gradients!r}"
-    )
-    ngr = len(optimizer.optimizer.param_groups)
-    for igr, gr in enumerate(optimizer.optimizer.param_groups):
-        total = sum(np.prod(g[0].shape) for g in gr["params"])
-        print(f"[{cmd_args.local_rank}/{ngr}-group{igr}] {list(gr)} - total={total}")
-    if hasattr(optimizer, "params_in_partition"):
-        ngr = len(optimizer.params_in_partition)
-        for igr, gr in enumerate(optimizer.params_in_partition):
-            total = sum(np.prod(g.data.shape) for g in gr)
-            print(f"[{cmd_args.local_rank}/{ngr}-in-group{igr}] total={total}")
-        print(f"[{cmd_args.local_rank}] --")
+    if hasattr(optimizer, "partition_count"):
+        print(
+            f"[{WORLD_SIZE}({cmd_args.local_rank})-partition_count] {optimizer.partition_count!r}",
+        )
+    if hasattr(optimizer, "contiguous_gradients"):
+        print(
+            f"[{WORLD_SIZE}({cmd_args.local_rank})-contiguous_gradients] {optimizer.contiguous_gradients!r}",
+        )
+    if False:
+        ngr = len(optimizer.optimizer.param_groups)
+        for igr, gr in enumerate(optimizer.optimizer.param_groups):
+            total = sum(np.prod(g[0].shape) for g in gr["params"])
+            print(
+                f"[{cmd_args.local_rank}/{ngr}-group{igr}] {list(gr)} - total={total}"
+            )
+        if hasattr(optimizer, "params_in_partition"):
+            ngr = len(optimizer.params_in_partition)
+            for igr, gr in enumerate(optimizer.params_in_partition):
+                total = sum(np.prod(g.data.shape) for g in gr)
+                print(f"[{cmd_args.local_rank}/{ngr}-in-group{igr}] total={total}")
+            print(f"[{cmd_args.local_rank}] --")
 
     # training
     model.train()
