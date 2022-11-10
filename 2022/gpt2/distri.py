@@ -51,7 +51,7 @@ def _main_deepspeed(model_name, cmd_args):
     local_rank = int(cmd_args.local_rank)
     scenario = os.path.split(os.path.splitext(cmd_args.deepspeed_config)[0])[-1]
     scenario = scenario.replace("last-config-", "")
-    log_name = f"log/log-distri-{local_rank}.txt"
+    log_name = f"log/log-distri-{model_name}-{local_rank}.txt"
 
     def _log_(d):
         d["scenario"] = scenario
@@ -149,10 +149,12 @@ def _main_deepspeed(model_name, cmd_args):
 
         if i == 0:
             kinds = get_stats(local_rank, model)
+            # skipping the first iteration
+            begin = time.perf_counter()
 
     end = time.perf_counter() - begin
     print(f"END local_rank={cmd_args.local_rank}/{WORLD_SIZE}, time={end}, N={i}")
-    info = dict(WORLD_SIZE=WORLD_SIZE, N=i, time=end, time_per_img=end / i)
+    info = dict(WORLD_SIZE=WORLD_SIZE, N=i, time=end, time_per_img=end / (i - 1))
     info.update(kinds)
     _log_(info)
 
@@ -171,4 +173,4 @@ parser = deepspeed.add_config_arguments(parser)
 cmd_args = parser.parse_args()
 print(f"[WORLD_SIZE={WORLD_SIZE},LOCAL_RANK={cmd_args.local_rank}]")
 print(cmd_args)
-_main_deepspeed("gpt2", cmd_args)
+_main_deepspeed("gpt2-large", cmd_args)

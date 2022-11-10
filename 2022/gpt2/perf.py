@@ -299,7 +299,7 @@ def train(
 
 
 def main(
-    epochs=10,
+    epochs=3,
     n_obs=100,
     scenario="ds0",
     train_batch_size=None,
@@ -360,7 +360,6 @@ def main(
     )
     model, encoded_tensors, labels, model_name = startup(model_name)
 
-    epochs = 10
     print()
     print(f"[{local_rank}-train]")
     device = torch.device("cuda:%d" % max(local_rank, 0))
