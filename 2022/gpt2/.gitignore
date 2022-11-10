@@ -3,3 +3,4 @@ onnx/
 *.svg
 *.html
 *.pkl
+*-checkpoint*
