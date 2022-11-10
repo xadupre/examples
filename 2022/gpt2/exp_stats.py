@@ -16,17 +16,23 @@ def get_stats(local_rank, model):
             if key not in kinds:
                 kinds[key] = 0
             kinds[key] += np.prod(tuple(p.shape))
-        for mod in model.modules():
-            pref = mod.__class__.__name__
-            params = list(mod.parameters())
-            for p in params:
-                size = np.prod(tuple(p.shape))
-                if size == 0:
-                    continue
-                key = pref, str(p.dtype), str(p.device)
+            if p.grad is not None:
+                key = str(p.dtype), str(p.grad.device), "grad"
                 if key not in kinds:
                     kinds[key] = 0
-                kinds[key] += size
+                kinds[key] += np.prod(tuple(p.grad.shape))
+        if False:
+            for mod in model.modules():
+                pref = mod.__class__.__name__
+                params = list(mod.parameters())
+                for p in params:
+                    size = np.prod(tuple(p.shape))
+                    if size == 0:
+                        continue
+                    key = pref, str(p.dtype), str(p.device)
+                    if key not in kinds:
+                        kinds[key] = 0
+                    kinds[key] += size
 
     kinds["get_rank"] = rk
     kinds["memory_cpu_percent"] = nvitop.host.memory_percent()
