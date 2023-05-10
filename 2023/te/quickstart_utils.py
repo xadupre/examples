@@ -45,6 +45,9 @@ def speedometer(
     print(f"Mean time: {start.elapsed_time(end)/timing_iters} ms")
 
 
+speedometer_simple = speedometer
+
+
 class DotProductAttention(torch.nn.Module):
     """Attention operation in Transformer layer
 
