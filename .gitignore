@@ -1,5 +1,9 @@
 __pycache__
 *.pyc
+2023/f8_bert/*.pkl
 2023/f8_bert/*.onnx
 2023/f8_bert/*.zip
+2023/f8_bert/*.json
+2023/f8_bert/*.pt
+2023/f8_bert/cache/*
 2023/f8_bert/data/*

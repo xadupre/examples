@@ -24,6 +24,8 @@ python _doc/examples/plot_bench_gemm_f8.py
 
 ## Benchmark: bert-squad
 
+See [PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb](https://github.com/microsoft/onnxruntime/blob/main/onnxruntime/python/tools/transformers/notebooks/PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb)
+
 **download the model**
 
 From page [bert-squad](https://github.com/onnx/models/tree/main/text/machine_comprehension/bert-squad)
@@ -38,8 +40,13 @@ wget https://github.com/onnx/models/raw/main/text/machine_comprehension/bert-squ
 See [google-research/bert](https://github.com/google-research/bert/)
 
 ```bash
-wget https://storage.googleapis.com/bert_models/2020_02_20/uncased_L-2_H-128_A-2.zip
-unzip uncased_L-2_H-128_A-2.zip -d data
+wget https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v1.1.json
+```
+
+**convert the model into onnx and dynamically quantize it**
+
+```bash
+python torch_up_to_onnx.py
 ```
 
 **quantize**
@@ -48,22 +55,10 @@ The quantization is a custom one. It only converts a *MatMul* into
 a sequence *Transpose + DynamicQuantizeLinear + GemmFloat8*.
 
 ```bash
-python3 -m onnx_extended quantize -i bertsquad-12.onnx -o bertsquad-12-fp8.onnx -v -v -k fp8 -q
-```
-
-**preparation**
-
-```bash
-mkdir tmp
+python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-fp8.onnx -v -v -k fp8 -q
 ```
 
 **benchmark**
 
 ```bash
-python run_onnx_squad.py \
-    --model ./bertsquad-12.onnx \
-    --vocab_file ./data/vocab.txt \
-    --predict_file ./tmp/dev-v1.1.json \
-    --bert_config_file ./data/bert_config.json \
-    --output ./tmp/
 ```
