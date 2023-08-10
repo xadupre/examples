@@ -7,7 +7,7 @@ import os
 import pickle
 import time
 import onnxruntime
-from onnxruntime.quantization import quantize_dynamic, QuantType
+from onnxruntime.quantization import quantize_dynamic
 import torch
 from transformers import BertConfig, BertForQuestionAnswering, BertTokenizer
 from transformers.data.processors.squad import SquadV1Processor

@@ -61,4 +61,19 @@ python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cas
 **benchmark**
 
 ```bash
+python benchmark.py
+```
+
+## Results Example
+
+```
+restoring dataset 'dataset.pkl'
+creating inference 'bert-base-cased-squad.onnx'
+starting benchmark 'bert-base-cased-squad.onnx'
+try 1: ort inference time = 187.06 ms
+try 2: ort inference time = 187.69 ms
+creating inference 'bert-base-cased-squad-int8.onnx'
+starting benchmark 'bert-base-cased-squad-int8.onnx'
+try 1: ort inference time = 268.20 ms
+try 2: ort inference time = 265.09 ms
 ```
