@@ -1,1 +1,3 @@
+__pycache__
+*.pyc
 2023/f8_bert/*.onnx
