@@ -2,7 +2,7 @@
 
 ## Preparation steps
 
-The benchamrks are implemented with
+The benchmarks are implemented with
 [onnx-extended](https://github.com/xadupre/onnx-extended).
 
 ```bash
@@ -26,18 +26,7 @@ python _doc/examples/plot_bench_gemm_f8.py
 
 See [PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb](https://github.com/microsoft/onnxruntime/blob/main/onnxruntime/python/tools/transformers/notebooks/PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb)
 
-**download the model**
-
-From page [bert-squad](https://github.com/onnx/models/tree/main/text/machine_comprehension/bert-squad)
-
-```bash
-wget https://github.com/onnx/models/raw/main/text/machine_comprehension/bert-squad/model/bertsquad-12.onnx
-wget https://github.com/onnx/models/raw/main/text/machine_comprehension/bert-squad/model/bertsquad-12-int8.onnx
-```
-
 **download the data**
-
-See [google-research/bert](https://github.com/google-research/bert/)
 
 ```bash
 wget https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v1.1.json
