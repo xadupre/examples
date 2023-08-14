@@ -83,7 +83,7 @@ def benchmark(
     total_samples: int,
     max_seq_length: int,
 ):
-    print("creating ineference")
+    print("creating inference")
     latency = []
     for i in range(total_samples):
         data = dataset[i]

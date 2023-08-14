@@ -9,7 +9,8 @@ The benchmarks are implemented with
 git clone https://github.com/xadupre/onnx-extended.git 
 cd onnx-extended 
 python -m pip install -r requirements-dev.txt 
-python setup.py build_ext --inplace --cuda-version=11.8 
+python setup.py build_ext --inplace --cuda-version=11.8 \
+       --ort-verion=<path to the built onnxruntime or empty to get the published version>
 export PYTHONPATH=. 
 ```
 
@@ -44,7 +45,7 @@ The quantization is a custom one. It only converts a *MatMul* into
 a sequence *Transpose + DynamicQuantizeLinear + GemmFloat8*.
 
 ```bash
-python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-fp8.onnx -v -v -k fp8 -q -l
+python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-fp8-local.onnx -v -v -k fp8 -q -l
 ```
 
 **benchmark**
