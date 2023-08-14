@@ -37,6 +37,7 @@ if __name__ == "__main__":
     dataset_file = "dataset.pkl"
     onnx_file = "bert-base-cased-squad.onnx"
     onnx_quant_file = "bert-base-cased-squad-int8.onnx"
+    onnx_quant_file_f8 = "bert-base-cased-squad-fp8-local.onnx"
     dataset_file = "dataset.pkl"
 
     print(f"restoring dataset {dataset_file!r}")
@@ -44,11 +45,15 @@ if __name__ == "__main__":
         dataset = pickle.load(f)
 
     # original model
-    for model_file in [onnx_file, onnx_quant_file]:
+    for model_file in [onnx_file, onnx_quant_file, onnx_quant_file_f8]:
         print(f"creating inference {model_file!r}")
-        session = onnxruntime.InferenceSession(
-            model_file, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
-        )
+        try:
+            session = onnxruntime.InferenceSession(
+                model_file, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+            )
+        except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
+            print(f"FAIL: {e}")
+            continue
 
         print(f"starting benchmark {model_file!r}")
         for i in range(2):
