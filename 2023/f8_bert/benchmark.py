@@ -38,6 +38,7 @@ if __name__ == "__main__":
     onnx_file = "bert-base-cased-squad.onnx"
     onnx_quant_file = "bert-base-cased-squad-int8.onnx"
     onnx_quant_file_f8 = "bert-base-cased-squad-fp8-local.onnx"
+    onnx_quant_file_fp16 = "bert-base-cased-squad-fp16.onnx"
     dataset_file = "dataset.pkl"
 
     print(f"restoring dataset {dataset_file!r}")
@@ -45,7 +46,12 @@ if __name__ == "__main__":
         dataset = pickle.load(f)
 
     # original model
-    for model_file in [onnx_file, onnx_quant_file, onnx_quant_file_f8]:
+    for model_file in [
+        onnx_file,
+        onnx_quant_file,
+        onnx_quant_file_f8,
+        onnx_quant_file_fp16,
+    ]:
         print(f"creating inference {model_file!r}")
         try:
             session = onnxruntime.InferenceSession(

@@ -39,13 +39,22 @@ wget https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v1.1.json
 python torch_up_to_onnx.py
 ```
 
-**quantize**
+**quantize to float 8 e4m3fn**
 
 The quantization is a custom one. It only converts a *MatMul* into
 a sequence *Transpose + DynamicQuantizeLinear + GemmFloat8*.
 
 ```bash
 python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-fp8-local.onnx -v -v -k fp8 -q -l
+```
+
+**quantize to float 16**
+
+The quantization is a custom one. It casts all float constant tensor to float 16.
+It does the same for inputs and outputs as well.
+
+```bash
+python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-fp8-local.onnx -v -v -k fp16 -q
 ```
 
 **benchmark**
