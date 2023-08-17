@@ -30,7 +30,7 @@ def benchmark(
 
 if __name__ == "__main__":
     max_seq_length = 128
-    total_samples = 200
+    total_samples = 100
     doc_stride = 128
     max_query_length = 64
 
@@ -57,11 +57,20 @@ if __name__ == "__main__":
             print(f"creating inference {model_file!r}")
             try:
                 session = onnxruntime.InferenceSession(
-                    model_file, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+                    model_file,
+                    providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
                 )
             except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
                 print(f"FAIL: {e}")
                 continue
+
+            print(f"warmup")
+            benchmark(
+                session,
+                dataset,
+                total_samples=total_samples,
+                max_seq_length=max_seq_length,
+            )
 
             print(f"starting benchmark {model_file!r}")
             for i in range(2):
