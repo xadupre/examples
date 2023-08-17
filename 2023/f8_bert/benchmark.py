@@ -52,6 +52,7 @@ if __name__ == "__main__":
         onnx_quant_file_f8,
         onnx_quant_file_fp16,
     ]:
+        print()
         print(f"creating inference {model_file!r}")
         try:
             session = onnxruntime.InferenceSession(
