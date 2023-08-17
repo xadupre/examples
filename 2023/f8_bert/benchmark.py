@@ -30,7 +30,7 @@ def benchmark(
 
 if __name__ == "__main__":
     max_seq_length = 128
-    total_samples = 100
+    total_samples = 200
     doc_stride = 128
     max_query_length = 64
 
@@ -46,29 +46,30 @@ if __name__ == "__main__":
         dataset = pickle.load(f)
 
     # original model
-    for model_file in [
-        onnx_file,
-        onnx_quant_file,
-        onnx_quant_file_f8,
-        onnx_quant_file_fp16,
-    ]:
-        print()
-        print(f"creating inference {model_file!r}")
-        try:
-            session = onnxruntime.InferenceSession(
-                model_file, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
-            )
-        except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
-            print(f"FAIL: {e}")
-            continue
+    for i in range(2):
+        for model_file in [
+            onnx_file,
+            onnx_quant_file,
+            onnx_quant_file_f8,
+            onnx_quant_file_fp16,
+        ]:
+            print()
+            print(f"creating inference {model_file!r}")
+            try:
+                session = onnxruntime.InferenceSession(
+                    model_file, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+                )
+            except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
+                print(f"FAIL: {e}")
+                continue
 
-        print(f"starting benchmark {model_file!r}")
-        for i in range(2):
-            latency = benchmark(
-                session,
-                dataset,
-                total_samples=total_samples,
-                max_seq_length=max_seq_length,
-            )
-            lat = sum(latency) * 1000 / len(latency)
-            print(f"try {i+1}: ort inference time = {lat:1.2f} ms")
+            print(f"starting benchmark {model_file!r}")
+            for i in range(2):
+                latency = benchmark(
+                    session,
+                    dataset,
+                    total_samples=total_samples,
+                    max_seq_length=max_seq_length,
+                )
+                lat = sum(latency) * 1000 / len(latency)
+                print(f"try {i+1}: ort inference time = {lat:1.2f} ms")

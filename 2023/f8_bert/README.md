@@ -54,7 +54,7 @@ The quantization is a custom one. It casts all float constant tensor to float 16
 It does the same for inputs and outputs as well.
 
 ```bash
-python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-fp8-local.onnx -v -v -k fp16 -q
+python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-fp16.onnx -v -v -k fp16 -q
 ```
 
 **benchmark**
