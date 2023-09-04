@@ -32,10 +32,11 @@ def benchmark(
 
 if __name__ == "__main__":
     max_seq_length = 128
-    total_samples = 100
+    total_samples = 150
     doc_stride = 128
     max_query_length = 64
     data = []
+    N = 4
 
     dataset_file = "dataset.pkl"
 
@@ -55,7 +56,7 @@ if __name__ == "__main__":
         dataset = pickle.load(f)
 
     # original model
-    for ni in range(2):
+    for ni in range(N):
         print("---------------------------------------")
         for im, model_file in enumerate(onnx_files):
             print()
@@ -100,7 +101,7 @@ if __name__ == "__main__":
                 continue
 
             print(f"starting benchmark {model_file!r}")
-            for i in range(2):
+            for i in range(3):
                 latency = benchmark(
                     session,
                     dataset,
