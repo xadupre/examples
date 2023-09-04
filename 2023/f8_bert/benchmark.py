@@ -67,6 +67,7 @@ if __name__ == "__main__":
                 )
             except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
                 print(f"FAIL: {e}")
+                data.append(dict(j=ni, onnx=model_file, error=str(e), event="load"))
                 continue
 
             print("warmup")
@@ -79,6 +80,7 @@ if __name__ == "__main__":
                 )
             except onnxruntime.capi.onnxruntime_pybind11_state.RuntimeException as e:
                 print(f"FAIL: {e}")
+                data.append(dict(j=ni, onnx=model_file, error=str(e), event="run"))
                 continue
 
             print(f"starting benchmark {model_file!r}")
