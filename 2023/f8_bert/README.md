@@ -33,7 +33,7 @@ See [PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb](https://github.com/microsoft/onnx
 wget https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v1.1.json
 ```
 
-**convert the model into onnx and dynamically quantize it**
+**convert the model into onnx and dynamically quantize it (static, dynamic, int8, uint8)**
 
 ```bash
 python torch_up_to_onnx.py
@@ -45,7 +45,7 @@ The quantization is a custom one. It only converts a *MatMul* into
 a sequence *Transpose + DynamicQuantizeLinear + GemmFloat8*.
 
 ```bash
-python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-fp8-local.onnx -v -v -k fp8 -q -l
+python3 -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-dyn-fp8.onnx -v -v -k fp8 -q -l
 ```
 
 **quantize to float 16**

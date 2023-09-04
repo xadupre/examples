@@ -6,6 +6,8 @@ python/tools/transformers/notebooks/PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb.
 import os
 import pickle
 import time
+from pathlib import Path
+import numpy as np
 import onnxruntime
 from onnxruntime.quantization import quantize_dynamic
 import torch
@@ -82,6 +84,7 @@ def benchmark(
     dataset,
     total_samples: int,
     max_seq_length: int,
+    savez: bool = False,
 ):
     print("creating inference")
     latency = []
@@ -95,7 +98,51 @@ def benchmark(
         start = time.perf_counter()
         session.run(None, ort_inputs)
         latency.append(time.perf_counter() - start)
+        if savez:
+            if not os.path.exists("data"):
+                os.mkdir("data")
+            data_file = os.path.join("data", f"batch_{i}.npz")
+            np.savez(str(data_file), **ort_inputs)
     return latency
+
+
+from onnxruntime.quantization import (
+    QuantFormat,
+    QuantType,
+    quantize_static,
+    CalibrationDataReader,
+)
+
+
+class CalibrationInputReader(CalibrationDataReader):
+    def __init__(self, data_folder: str):
+        self.batch_id = 0
+        self.input_folder = Path(data_folder)
+
+        if not self.input_folder.is_dir():
+            raise RuntimeError(
+                f"Can't find input data directory: {str(self.input_folder)}"
+            )
+        data_file = self.input_folder / f"batch_{self.batch_id}.npz"
+        if not data_file.exists():
+            raise RuntimeError(f"No data files found under '{self.input_folder}'")
+
+    def get_next(self):
+        self.input_dict = None
+        data_file = self.input_folder / f"batch_{self.batch_id}.npz"
+        if not data_file.exists():
+            return None
+        self.batch_id += 1
+
+        self.input_dict = {}
+        npy_file = np.load(data_file)
+        for name in npy_file.files:
+            self.input_dict[name] = npy_file[name]
+
+        return self.input_dict
+
+    def rewind(self):
+        self.batch_id = 0
 
 
 if __name__ == "__main__":
@@ -109,9 +156,12 @@ if __name__ == "__main__":
 
     model_file = "model.pt"
     onnx_file = "bert-base-cased-squad.onnx"
-    onnx_quant_file = "bert-base-cased-squad-int8.onnx"
+    onnx_quant_file = "bert-base-cased-squad-dyn-{qtype}.onnx"
+    onnx_quant_qdq_file = "bert-base-cased-squad-qdq-{qtype}.onnx"
+    onnx_quant_qo_file = "bert-base-cased-squad-qo-{qtype}.onnx"
     dataset_file = "dataset.pkl"
 
+    # Datasets
     if not os.path.exists(dataset_file) or not os.path.exists(model_file):
         print(f"loading dataset {dataset_file!r} and {model_file!r}")
         model, features, dataset = transform(
@@ -128,18 +178,22 @@ if __name__ == "__main__":
         with open(model_file, "rb") as f:
             model = pickle.load(f)
 
+    # export model
     if not os.path.exists(onnx_file):
         print(f"export model {onnx_file!r}")
         export_to_onnx(onnx_file, model, dataset, max_seq_length)
     else:
         print(f"model already exported {onnx_file!r}")
 
-    if not os.path.exists(onnx_quant_file):
-        print(f"quantize model {onnx_quant_file!r}")
-        quantized_model = quantize_dynamic(onnx_file, onnx_quant_file)
-    else:
-        print(f"model already quantized {onnx_quant_file!r}")
+    # dynamically quantize
+    for qtype in [QuantType.QInt8, QuantType.QUInt8]:
+        qfile = onnx_quant_file.format(qtype=qtype.name.lower())
+        if not os.path.exists(qfile):
+            print(f"quantize (dynamic) model {qfile!r}")
+            quantized_model = quantize_dynamic(onnx_file, qfile, weight_type=qtype)
+            print("done.")
 
+    # first benchmark
     print(f"creating inference {onnx_file!r}")
     session = onnxruntime.InferenceSession(
         onnx_file, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -151,27 +205,41 @@ if __name__ == "__main__":
         dataset,
         total_samples=total_samples,
         max_seq_length=max_seq_length,
+        savez=True,
     )
     print(
-        "OnnxRuntime cpu Inference time = {} ms".format(
-            format(sum(latency) * 1000 / len(latency), ".2f")
-        )
+        f"OnnxRuntime cuda/cpu Inference time = {sum(latency) * 1000 / len(latency):1.2f} ms"
     )
 
-    print(f"creating inference {onnx_quant_file!r}")
-    session = onnxruntime.InferenceSession(
-        onnx_file, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
-    )
+    for qtype in [QuantType.QInt8, QuantType.QUInt8]:
+        # static quantize qdq
+        qfile = onnx_quant_qdq_file.format(qtype=qtype.name.lower())
+        if not os.path.exists(qfile):
+            print(f"quantize (static qdq) model {qfile!r}")
+            input_reader = CalibrationInputReader("data")
+            quantize_static(
+                onnx_file,
+                qfile,
+                input_reader,
+                quant_format=QuantFormat.QDQ,
+                per_channel=False,
+                weight_type=qtype,
+                activation_type=qtype,
+            )
+            print("done.")
 
-    print(f"starting benchmark {onnx_quant_file!r}")
-    latency = benchmark(
-        session,
-        dataset,
-        total_samples=total_samples,
-        max_seq_length=max_seq_length,
-    )
-    print(
-        "OnnxRuntime cpu Inference time = {} ms".format(
-            format(sum(latency) * 1000 / len(latency), ".2f")
-        )
-    )
+        # static quantize qo
+        qfile = onnx_quant_qo_file.format(qtype=qtype.name.lower())
+        if not os.path.exists(qfile):
+            print(f"quantize (static qo) model {qfile!r}")
+            input_reader = CalibrationInputReader("data")
+            quantize_static(
+                onnx_file,
+                qfile,
+                input_reader,
+                quant_format=QuantFormat.QOperator,
+                per_channel=False,
+                weight_type=qtype,
+                activation_type=qtype,
+            )
+            print("done.")

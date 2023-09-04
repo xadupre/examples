@@ -3,6 +3,7 @@ Inspired from
 https://github.com/microsoft/onnxruntime/blob/main/onnxruntime/
 python/tools/transformers/notebooks/PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb.
 """
+import os
 import pickle
 import time
 import onnxruntime
@@ -35,10 +36,16 @@ if __name__ == "__main__":
     max_query_length = 64
 
     dataset_file = "dataset.pkl"
-    onnx_file = "bert-base-cased-squad.onnx"
-    onnx_quant_file = "bert-base-cased-squad-int8.onnx"
-    onnx_quant_file_f8 = "bert-base-cased-squad-fp8-local.onnx"
-    onnx_quant_file_fp16 = "bert-base-cased-squad-fp16.onnx"
+
+    onnx_files = list(
+        sorted(
+            [
+                name
+                for name in os.listdir(".")
+                if os.path.splitext(name)[-1] == ".onnx" and "-squad" in name
+            ]
+        )
+    )
     dataset_file = "dataset.pkl"
 
     print(f"restoring dataset {dataset_file!r}")
@@ -47,14 +54,10 @@ if __name__ == "__main__":
 
     # original model
     for i in range(2):
-        for model_file in [
-            onnx_file,
-            onnx_quant_file,
-            onnx_quant_file_f8,
-            onnx_quant_file_fp16,
-        ]:
+        print("---------------------------------------")
+        for im, model_file in enumerate(onnx_files):
             print()
-            print(f"creating inference {model_file!r}")
+            print(f"creating inference {im+1}/{len(onnx_files)}: {model_file!r}")
             try:
                 session = onnxruntime.InferenceSession(
                     model_file,
@@ -64,7 +67,7 @@ if __name__ == "__main__":
                 print(f"FAIL: {e}")
                 continue
 
-            print(f"warmup")
+            print("warmup")
             benchmark(
                 session,
                 dataset,
