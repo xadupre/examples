@@ -67,7 +67,15 @@ if __name__ == "__main__":
                 )
             except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:
                 print(f"FAIL: {e}")
-                data.append(dict(j=ni, onnx=model_file, error=str(e), event="load"))
+                data.append(
+                    dict(
+                        j=ni,
+                        onnx=model_file,
+                        error=str(e),
+                        event="load",
+                        size=os.stat(model_file).st_size,
+                    )
+                )
                 continue
 
             print("warmup")
@@ -80,7 +88,15 @@ if __name__ == "__main__":
                 )
             except onnxruntime.capi.onnxruntime_pybind11_state.RuntimeException as e:
                 print(f"FAIL: {e}")
-                data.append(dict(j=ni, onnx=model_file, error=str(e), event="run"))
+                data.append(
+                    dict(
+                        j=ni,
+                        onnx=model_file,
+                        error=str(e),
+                        event="run",
+                        size=os.stat(model_file).st_size,
+                    )
+                )
                 continue
 
             print(f"starting benchmark {model_file!r}")
@@ -93,7 +109,16 @@ if __name__ == "__main__":
                 )
                 lat = sum(latency) * 1000 / len(latency)
                 print(f"try {i+1}: ort inference time = {lat:1.2f} ms")
-                data.append(dict(i=i, j=ni, onnx=model_file, latency=lat))
+                data.append(
+                    dict(
+                        i=i,
+                        j=ni,
+                        onnx=model_file,
+                        latency=lat,
+                        event="run",
+                        size=os.stat(model_file).st_size,
+                    )
+                )
 
     df = pandas.DataFrame(data)
     print(df)
