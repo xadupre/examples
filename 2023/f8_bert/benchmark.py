@@ -7,6 +7,7 @@ import os
 import pickle
 import time
 import onnxruntime
+import pandas
 
 
 def benchmark(
@@ -34,6 +35,7 @@ if __name__ == "__main__":
     total_samples = 100
     doc_stride = 128
     max_query_length = 64
+    data = []
 
     dataset_file = "dataset.pkl"
 
@@ -53,7 +55,7 @@ if __name__ == "__main__":
         dataset = pickle.load(f)
 
     # original model
-    for i in range(2):
+    for ni in range(2):
         print("---------------------------------------")
         for im, model_file in enumerate(onnx_files):
             print()
@@ -68,12 +70,16 @@ if __name__ == "__main__":
                 continue
 
             print("warmup")
-            benchmark(
-                session,
-                dataset,
-                total_samples=total_samples,
-                max_seq_length=max_seq_length,
-            )
+            try:
+                benchmark(
+                    session,
+                    dataset,
+                    total_samples=total_samples,
+                    max_seq_length=max_seq_length,
+                )
+            except onnxruntime.capi.onnxruntime_pybind11_state.RuntimeException as e:
+                print(f"FAIL: {e}")
+                continue
 
             print(f"starting benchmark {model_file!r}")
             for i in range(2):
@@ -85,3 +91,11 @@ if __name__ == "__main__":
                 )
                 lat = sum(latency) * 1000 / len(latency)
                 print(f"try {i+1}: ort inference time = {lat:1.2f} ms")
+                data.append(dict(i=i, j=ni, onnx=model_file, latency=lat))
+
+    df = pandas.DataFrame(data)
+    print(df)
+    df.to_csv("report.csv", index=False)
+    df.to_excel("report.xlsx", index=False)
+    with open("report.csv") as f:
+        print(f.read())
