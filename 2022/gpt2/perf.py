@@ -1,4 +1,3 @@
-import argparse
 import json
 import logging
 import os
@@ -152,7 +151,6 @@ def train(
         logger = logging.getLogger("DeepSpeed")
         logger.setLevel(logging.WARNING)
 
-        import deepspeed
         from deepspeed.runtime.zero.stage3 import (
             estimate_zero3_model_states_mem_needs_all_live,
         )
@@ -193,13 +191,14 @@ def train(
             # optimizer=optimizer,
         )
         assert optimizer is not None
-        object_step = model
 
         print(
-            f"[{local_rank}-train-deepspeed] is_gradient_accumulation_boundary={model.is_gradient_accumulation_boundary()}",
+            f"[{local_rank}-train-deepspeed] is_gradient_accumulation_boundary="
+            f"{model.is_gradient_accumulation_boundary()}",
         )
         print(
-            f"[{local_rank}-train-deepspeed] custom_loss_scaler={getattr(optimizer, 'custom_loss_scaler', None)}",
+            f"[{local_rank}-train-deepspeed] custom_loss_scaler="
+            f"{getattr(optimizer, 'custom_loss_scaler', None)}",
         )
 
         model = model  # Wrapper(model)
@@ -262,7 +261,8 @@ def train(
                     raise RuntimeError(
                         f"Overflow after step(), offload={optimizer.cpu_offload}, "
                         f"len(optimizer.bit16_groups)={len(optimizer.bit16_groups)}, "
-                        f"len(optimizer.averaged_gradients)={len(optimizer.averaged_gradients)}, "
+                        f"len(optimizer.averaged_gradients)="
+                        f"{len(optimizer.averaged_gradients)}, "
                         f"partition_gradients={optimizer.partition_gradients}, "
                         f"loss={lo!r}, total_loss_train={total_loss_train!r}, i={i}",
                     )
@@ -348,14 +348,17 @@ def main(
     scenario = "-".join(sorted(scenario.lower().split("-")))
     local_rank = -1
     print(
-        f"[{local_rank}-train] get_device_capability()={torch.cuda.get_device_capability()}",
+        f"[{local_rank}-train] get_device_capability()="
+        f"{torch.cuda.get_device_capability()}",
     )
     print(f"[{local_rank}-train] get_arch_list()={torch.cuda.get_arch_list()}")
     print(
-        f"[{local_rank}-train] get_device_properties(...)={torch.cuda.get_device_properties(torch.device('cuda'))}",
+        f"[{local_rank}-train] get_device_properties(...)="
+        f"{torch.cuda.get_device_properties(torch.device('cuda'))}",
     )
     print(
-        f"[{local_rank}-train] epochs={epochs}, n_obs={n_obs}, scenario={scenario!r}, model_name={model_name!r}",
+        f"[{local_rank}-train] epochs={epochs}, n_obs={n_obs}, "
+        f"scenario={scenario!r}, model_name={model_name!r}",
     )
     model, encoded_tensors, labels, model_name = startup(model_name)
 
@@ -381,7 +384,8 @@ def main(
         f.write(str(stats))
         f.write("\n")
     print(
-        f"[times] scenario={scenario}, N={stats['N']}, train_batch_size={stats['train_batch_size']}, "
+        f"[times] scenario={scenario}, N={stats['N']}, "
+        f"train_batch_size={stats['train_batch_size']}, "
         f"time_per_iter={stats['time_per_iter']}"
     )
     print("[done]")
@@ -390,7 +394,7 @@ def main(
 if __name__ == "__main__":
     # nvitop -m
     if any(map(lambda x: x.startswith("--local_rank"), sys.argv)):
-        raise RuntimeError(f"Use distri.py.")
+        raise RuntimeError("Use distri.py.")
     elif any(map(lambda x: x.startswith("--scenario"), sys.argv)):
         print(f"[WORLD_SIZE={WORLD_SIZE}]")
         import fire

@@ -1,5 +1,4 @@
 import torch
-from transformers import GPT2Model, GPT2Tokenizer
 
 
 class GPT2Loss(torch.nn.Module):

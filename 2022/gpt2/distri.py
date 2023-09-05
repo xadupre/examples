@@ -26,10 +26,10 @@ from torch.utils.data import DataLoader, Dataset, IterableDataset, Subset, Tenso
 from tqdm import tqdm
 from transformers import GPT2Model, GPT2Tokenizer
 from transformers.deepspeed import HfDeepSpeedConfig
-
 from data_helper import CustomDataset
 from exp_stats import get_stats
 from gpt2_loss import GPT2Loss
+
 
 WORLD_SIZE = int(os.getenv("WORLD_SIZE", "1"))
 
@@ -106,15 +106,18 @@ def _main_deepspeed(model_name, cmd_args):
     )
 
     print(
-        f"[{WORLD_SIZE}({cmd_args.local_rank})-trainds] N={len(my_dataloader)}, {type(model)}, {type(optimizer)}",
+        f"[{WORLD_SIZE}({cmd_args.local_rank})-trainds] "
+        f"N={len(my_dataloader)}, {type(model)}, {type(optimizer)}",
     )
     if hasattr(optimizer, "partition_count"):
         print(
-            f"[{WORLD_SIZE}({cmd_args.local_rank})-partition_count] {optimizer.partition_count!r}",
+            f"[{WORLD_SIZE}({cmd_args.local_rank})-partition_count] "
+            f"{optimizer.partition_count!r}",
         )
     if hasattr(optimizer, "contiguous_gradients"):
         print(
-            f"[{WORLD_SIZE}({cmd_args.local_rank})-contiguous_gradients] {optimizer.contiguous_gradients!r}",
+            f"[{WORLD_SIZE}({cmd_args.local_rank})-contiguous_gradients] "
+            f"{optimizer.contiguous_gradients!r}",
         )
     if False:
         ngr = len(optimizer.optimizer.param_groups)

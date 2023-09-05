@@ -1,8 +1,8 @@
 import os
-import pprint
 import warnings
 import torch
 from torch.onnx import export as torch_export
+import transformer_engine.pytorch as te
 
 
 def create_fp8_recipe():
@@ -90,7 +90,6 @@ train_torch(layer, x, y)
 print("done.")
 
 print("TransformerEngine")
-import transformer_engine.pytorch as te
 
 
 class TeBasicLayer(torch.nn.Module):
@@ -222,7 +221,7 @@ print("done.")
 
 print("#################################################")
 print("to_onnx - torch")
-from torch.onnx import export
+# from torch.onnx import export
 
 torch_export(
     layer_norm,
@@ -236,9 +235,11 @@ torch_export(
 print("#################################################")
 print("to_onnx - torch - TransformerEngine")
 
-# Once get_extra_state is removed. It fails here in _trace_and_get_graph_from_model (C++ issue).
+# Once get_extra_state is removed. It fails here in _trace_and_get_graph_from_model
+# (C++ issue).
 # Gemm is used in the normalization. It goes through one of the cpp extension.
-# A custom gemm function is called with a preallocated buffer: gemm(input, output) -> None.
+# A custom gemm function is called with a preallocated buffer:
+# gemm(input, output) -> None.
 # This call is made in a torch function and then encapsulated in a torch module.
 # My guess it breaks the tracing somehow.
 # https://github.com/microsoft/onnxruntime-extensions/blob/main/tutorials/pytorch_custom_ops_tutorial.ipynb

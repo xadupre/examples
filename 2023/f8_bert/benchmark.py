@@ -62,7 +62,7 @@ if __name__ == "__main__":
             print()
             print(f"creating inference {im+1}/{len(onnx_files)}: {model_file!r}")
             options = onnxruntime.SessionOptions()
-            if "-ext" in name:
+            if "-ext" in model_file:
                 from onnx_extended.ortops.tutorial.cuda import get_ort_ext_libs
 
                 options.register_custom_ops_library(get_ort_ext_libs()[0])

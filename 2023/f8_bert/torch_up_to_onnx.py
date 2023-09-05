@@ -10,6 +10,12 @@ from pathlib import Path
 import numpy as np
 import onnxruntime
 from onnxruntime.quantization import quantize_dynamic
+from onnxruntime.quantization import (
+    QuantFormat,
+    QuantType,
+    quantize_static,
+    CalibrationDataReader,
+)
 import torch
 from transformers import BertConfig, BertForQuestionAnswering, BertTokenizer
 from transformers.data.processors.squad import SquadV1Processor
@@ -106,14 +112,6 @@ def benchmark(
     return latency
 
 
-from onnxruntime.quantization import (
-    QuantFormat,
-    QuantType,
-    quantize_static,
-    CalibrationDataReader,
-)
-
-
 class CalibrationInputReader(CalibrationDataReader):
     def __init__(self, data_folder: str):
         self.batch_id = 0
@@ -208,7 +206,8 @@ if __name__ == "__main__":
         savez=True,
     )
     print(
-        f"OnnxRuntime cuda/cpu Inference time = {sum(latency) * 1000 / len(latency):1.2f} ms"
+        f"OnnxRuntime cuda/cpu Inference time = "
+        f"{sum(latency) * 1000 / len(latency):1.2f} ms"
     )
 
     for qtype in [QuantType.QInt8, QuantType.QUInt8]:
