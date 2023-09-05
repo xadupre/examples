@@ -61,9 +61,15 @@ if __name__ == "__main__":
         for im, model_file in enumerate(onnx_files):
             print()
             print(f"creating inference {im+1}/{len(onnx_files)}: {model_file!r}")
+            options = onnxruntime.SessionOptions()
+            if "-ext" in name:
+                from onnx_extended.ortops.tutorial.cuda import get_ort_ext_libs
+
+                options.register_custom_ops_library(get_ort_ext_libs()[0])
             try:
                 session = onnxruntime.InferenceSession(
                     model_file,
+                    options,
                     providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
                 )
             except onnxruntime.capi.onnxruntime_pybind11_state.Fail as e:

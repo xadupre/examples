@@ -246,7 +246,6 @@ def train(
             optimizer.zero_grad()
 
         for i, (x, y) in enumerate(my_dataloader):
-
             # optimizer.zero_grad()
             batch_loss = model(x["input_ids"], y)
             total_loss_train += batch_loss.to(float).item()
