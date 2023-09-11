@@ -7,6 +7,7 @@ import os
 import pickle
 import time
 import onnxruntime
+import numpy as np
 import pandas
 
 
@@ -19,11 +20,15 @@ def benchmark(
     latency = []
     for i in range(total_samples):
         data = dataset[i]
-        ort_inputs = {
+        orig_ort_inputs = {
             "input_ids": data[0].cpu().reshape(1, max_seq_length).numpy(),
             "input_mask": data[1].cpu().reshape(1, max_seq_length).numpy(),
             "segment_ids": data[2].cpu().reshape(1, max_seq_length).numpy(),
         }
+        ort_inputs = {}
+        # Gemm8 only supports shapes, each dimension must be a multiple of 8
+        for k, v in orig_ort_inputs.items():
+            ort_inputs[k] = np.vstack([v] * 8)
         start = time.perf_counter()
         session.run(None, ort_inputs)
         latency.append(time.perf_counter() - start)
