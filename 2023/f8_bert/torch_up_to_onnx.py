@@ -96,15 +96,11 @@ def benchmark(
     latency = []
     for i in range(total_samples):
         data = dataset[i]
-        orig_ort_inputs = {
+        ort_inputs = {
             "input_ids": data[0].cpu().reshape(1, max_seq_length).numpy(),
             "input_mask": data[1].cpu().reshape(1, max_seq_length).numpy(),
             "segment_ids": data[2].cpu().reshape(1, max_seq_length).numpy(),
         }
-        ort_inputs = {}
-        for k, v in orig_ort_inputs.items():
-            ort_inputs[k] = np.vstack([v] * 8)
-            print("****", k, ort_inputs[k].shape)
         start = time.perf_counter()
         session.run(None, ort_inputs)
         latency.append(time.perf_counter() - start)
