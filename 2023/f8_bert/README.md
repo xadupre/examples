@@ -45,8 +45,8 @@ The quantization is a custom one. It only converts a *MatMul* into
 a sequence *Transpose + DynamicQuantizeLinear + GemmFloat8*.
 
 ```bash
-python -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-dyn-fp8.onnx -v -v -k fp8 -q
-python -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-dyn-fp8-ext.onnx -s onnx-extended -v -v -k fp8 -q
+python -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-dyn-fp8.onnx -v -v -k fp8 -q -x /qa_outputs/MatMul
+python -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-cased-squad-dyn-fp8-ext.onnx -s onnx-extended -v -v -k fp8 -q -x /qa_outputs/MatMul
 ```
 
 **quantize to float 16**
