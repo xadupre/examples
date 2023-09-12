@@ -7,7 +7,6 @@ import os
 import pickle
 import time
 import onnxruntime
-import numpy as np
 import pandas
 
 

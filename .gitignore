@@ -9,4 +9,7 @@ __pycache__
 2023/f8_bert/data/*
 2023/f8_bert/*.data
 2023/f8_bert/*.coef
+2023/f8_bert/*.csv
+2023/f8_bert/*.png
+2023/f8_bert/*.prof
 
