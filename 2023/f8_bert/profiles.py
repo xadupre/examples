@@ -10,7 +10,12 @@ import shutil
 import onnxruntime
 import logging
 import matplotlib.pyplot as plt
-from onnx_extended.tools.js_profile import js_profile_to_dataframe, plot_ort_profile
+from onnx_extended.tools.js_profile import (
+    js_profile_to_dataframe,
+    plot_ort_profile,
+    _preprocess_graph1,
+    _preprocess_graph2,
+)
 
 
 for name in [
@@ -106,8 +111,9 @@ if __name__ == "__main__":
         )
         df.to_csv(noext + ".raw.op.csv")
         fig, ax = plt.subplots(1, 2, figsize=(10, 25))
-        _, df2 = plot_ort_profile(df, ax[0], ax[1], title=profname)
+        plot_ort_profile(df, ax[0], ax[1], title=profname)
         fig.tight_layout()
+        df2 = _preprocess_graph1(df)
         print("profiling data per operator, processed shape=", df2.shape)
         df2.to_csv(noext + ".op.csv")
         fig.savefig(noext + ".op.png")
@@ -119,8 +125,9 @@ if __name__ == "__main__":
         print("profiling data per node, shape=", df.shape)
         df.to_csv(noext + ".raw.node.csv")
         fig, ax = plt.subplots(1, 1, figsize=(10, 200))
-        _, df3 = plot_ort_profile(df, ax, title=profname)
+        plot_ort_profile(df, ax, title=profname)
         fig.tight_layout()
+        df3 = _preprocess_graph2(df)
         print("profiling data per node, processed shape=", df3.shape)
         df3.to_csv(noext + ".node.csv")
         fig.savefig(noext + ".node.png")
