@@ -113,7 +113,7 @@ if __name__ == "__main__":
         fig, ax = plt.subplots(1, 2, figsize=(10, 25))
         plot_ort_profile(df, ax[0], ax[1], title=profname)
         fig.tight_layout()
-        df2 = _preprocess_graph1(df)
+        df2 = _preprocess_graph1(df)[-1]
         print("profiling data per operator, processed shape=", df2.shape)
         df2.to_csv(noext + ".op.csv")
         fig.savefig(noext + ".op.png")
