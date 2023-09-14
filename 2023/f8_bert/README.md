@@ -64,6 +64,12 @@ python -m onnx_extended quantize -i bert-base-cased-squad.onnx -o bert-base-case
 python benchmark.py
 ```
 
+**profiling**
+
+```bash
+python profiles.py
+```
+
 ## Results Example
 
 ```

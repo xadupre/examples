@@ -45,6 +45,8 @@ def profiles(
 
 
 if __name__ == "__main__":
+    if not os.path.exists("stat"):
+        os.mkdir("stat")
     max_seq_length = 128
     total_samples = 11
     doc_stride = 128
@@ -99,11 +101,13 @@ if __name__ == "__main__":
         )
         prof = session.end_profiling()
 
-        noext = os.path.splitext(model_file)[0]
+        noext = "stat/" + os.path.splitext(model_file)[0]
         profname = noext + ".prof"
         shutil.copy(prof, profname)
 
         df = js_profile_to_dataframe(profname, first_it_out=True)
+        cols = list(df.reset_index(drop=False).columns)
+        assert "it==0" in str(cols), f"Unexpected columns {cols}"
         print(
             "profiling data per operator, shape=",
             df.shape,
@@ -114,6 +118,8 @@ if __name__ == "__main__":
         plot_ort_profile(df, ax[0], ax[1], title=profname)
         fig.tight_layout()
         df2 = _preprocess_graph1(df)[-1]
+        cols = list(df2.reset_index(drop=False).columns)
+        assert "it==0" in str(cols), f"Unexpected columns {cols}"
         print("profiling data per operator, processed shape=", df2.shape)
         df2.to_csv(noext + ".op.csv")
         fig.savefig(noext + ".op.png")
@@ -121,13 +127,21 @@ if __name__ == "__main__":
         df2.to_csv(st)
         print(st.getvalue())
 
-        df = js_profile_to_dataframe(profname, first_it_out=True, agg=True)
+        df = js_profile_to_dataframe(
+            profname, first_it_out=True, agg=True, with_shape=True
+        )
+        cols = list(df.reset_index(drop=False).columns)
+        assert "it==0" in str(cols), f"Unexpected columns {cols}"
+        assert "shape" in str(cols), f"Unexpected columns {cols}"
         print("profiling data per node, shape=", df.shape)
         df.to_csv(noext + ".raw.node.csv")
         fig, ax = plt.subplots(1, 1, figsize=(10, 200))
         plot_ort_profile(df, ax, title=profname)
         fig.tight_layout()
         df3 = _preprocess_graph2(df)
+        cols = list(df3.reset_index(drop=False).columns)
+        assert "it==0" in str(cols), f"Unexpected columns {cols}"
+        assert "shape" in str(cols), f"Unexpected columns {cols}"
         print("profiling data per node, processed shape=", df3.shape)
         df3.to_csv(noext + ".node.csv")
         fig.savefig(noext + ".node.png")
