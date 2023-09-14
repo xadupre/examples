@@ -3,7 +3,6 @@ Inspired from
 https://github.com/microsoft/onnxruntime/blob/main/onnxruntime/
 python/tools/transformers/notebooks/PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb.
 """
-import io
 import os
 import pickle
 import shutil
@@ -123,9 +122,6 @@ if __name__ == "__main__":
         print("profiling data per operator, processed shape=", df2.shape)
         df2.to_csv(noext + ".op.csv")
         fig.savefig(noext + ".op.png")
-        st = io.StringIO()
-        df2.to_csv(st)
-        print(st.getvalue())
 
         df = js_profile_to_dataframe(
             profname, first_it_out=True, agg=True, with_shape=True
@@ -145,6 +141,3 @@ if __name__ == "__main__":
         print("profiling data per node, processed shape=", df3.shape)
         df3.to_csv(noext + ".node.csv")
         fig.savefig(noext + ".node.png")
-        st = io.StringIO()
-        df3.to_csv(st)
-        print(st.getvalue())
