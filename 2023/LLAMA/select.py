@@ -1,5 +1,4 @@
 import os
-import onnx
 from onnx_extended.tools import load_model, save_model, load_external
 from onnx_extended.tools.onnx_manipulations import select_model_inputs_outputs
 
