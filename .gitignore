@@ -13,3 +13,4 @@ __pycache__
 2023/f8_bert/*.png
 2023/f8_bert/*.prof
 2023/f8_bert/stat/*
+2023/LLAMA/models/*
