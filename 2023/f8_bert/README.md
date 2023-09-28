@@ -3,10 +3,10 @@
 ## Preparation steps
 
 The benchmarks are implemented with
-[onnx-extended](https://github.com/xadupre/onnx-extended).
+[onnx-extended](https://github.com/sdpython/onnx-extended).
 
 ```bash
-git clone https://github.com/xadupre/onnx-extended.git 
+git clone https://github.com/sdpython/onnx-extended.git 
 cd onnx-extended 
 python -m pip install -r requirements-dev.txt 
 python setup.py build_ext --inplace --cuda-version=11.8 \

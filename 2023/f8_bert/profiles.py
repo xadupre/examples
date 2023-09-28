@@ -46,6 +46,8 @@ def profiles(
 if __name__ == "__main__":
     if not os.path.exists("stat"):
         os.mkdir("stat")
+    if not os.path.exists("optimized"):
+        os.mkdir("optimized")
     max_seq_length = 128
     total_samples = 11
     doc_stride = 128
@@ -77,6 +79,7 @@ if __name__ == "__main__":
         print(f"creating inference {im+1}/{len(onnx_files)}: {model_file!r}")
         options = onnxruntime.SessionOptions()
         options.enable_profiling = True
+        options.optimized_model_filepath = f"optimized/optimized-{model_file}"
         if "-ext" in model_file:
             from onnx_extended.ortops.tutorial.cuda import get_ort_ext_libs
 
