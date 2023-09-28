@@ -43,12 +43,13 @@ def run_onnx_llamav2(
     max_gen_len: int = 256,
 ) -> str:
     # Create the ONNX session
+    print(f"create session with {onnx_file!r}")
     options = onnxruntime.SessionOptions()
     llm_session = onnxruntime.InferenceSession(
         onnx_file,
         sess_options=options,
         providers=[
-            "DmlExecutionProvider",
+            # "DmlExecutionProvider",
             "CUDAExecutionProvider",
             "CPUExecutionProvider",
         ],
@@ -78,10 +79,12 @@ def run_onnx_llamav2(
     n_heads = k_cache_shape[3]
 
     # Initialize the tokenizer and produce the initial tokens.
+    print(f"tokenize with {tokenizer_path!r}")
     tokenizer = Tokenizer(model_path=tokenizer_path)
     tokens = tokenizer.encode(prompt, bos=True, eos=False)
 
     # create the embedding layer.
+    print("torch embedding")
     embedding_layer = torch.nn.Embedding(tokenizer.n_words, hidden_size)
     embedding_layer.load_state_dict(torch.load(embedding_file))
     embedding_layer.eval()
@@ -101,9 +104,11 @@ def run_onnx_llamav2(
     v_cache = np.zeros([1, n_layers, max_seq_len, n_heads, head_dim], dtype=data_type)
 
     # Iteratively generate tokens.
+    print("run session")
     pos = np.array(0)
     output_tokens = []
     for idx in range(max_gen_len):
+        print(f"idx={idx}")
         results = llm_session.run(
             None,
             {
@@ -114,6 +119,11 @@ def run_onnx_llamav2(
                 "pos": pos.astype(np.int64),
             },
         )
+
+        if "block_list" in onnx_file:
+            print("only a subpart, stop")
+            print(results)
+            return "subpart"
         logits, k_out, v_out = results[:3]
 
         # Decide the next token using your preferred sampling strategy.
@@ -134,6 +144,7 @@ def run_onnx_llamav2(
         x = embedding_layer(torch.tensor(next_token)).unsqueeze(0)
         x = x.cpu().detach().numpy().astype(data_type)
 
+    print("decode")
     output_str = tokenizer.decode(torch.tensor(output_tokens).tolist())
 
     return output_str
@@ -178,3 +189,9 @@ if __name__ == "__main__":
     #       --embedding_file <chosen_submodule>/embeddings.pth \
     #       --tokenizer_path tokenizer.model \
     #       --prompt "What is the lightest element?"
+
+    # python run_model.py \
+    #       --onnx_file models/llama_16_block_list_1.onnx \
+    #       --embedding_file ~/github/Llama-2-Onnx/7B_FT_float16/embeddings.pth \
+    #       --tokenizer_path ~/github/Llama-2-Onnx/tokenizer.model \
+    #       --prompt "Waht is the lightest element?"
