@@ -1,5 +1,9 @@
+https://github.com/IntelLabs/FP8-Emulation-Toolkit.git
+neural-compressor
 onnx
 onnx-extended>=0.2.2
 onnxruntime>=1.16.0
 sentencepiece
 torch
+
+
