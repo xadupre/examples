@@ -184,14 +184,22 @@ if __name__ == "__main__":
 
     print(response)
 
-    # python MinimumExample/Example_ONNX_LlamaV2.py \
-    #       --onnx_file <chosen_submodule>/ONNX/LlamaV2_<chosen_submodule>.onnx \
-    #       --embedding_file <chosen_submodule>/embeddings.pth \
-    #       --tokenizer_path tokenizer.model \
-    #       --prompt "What is the lightest element?"
+    """
+    python run_model.py \
+        --onnx_file ~/github/Llama-2-Onnx/7B_FT_float16/ONNX/LlamaV2_7B_FT_float16.onnx \
+        --embedding_file ~/github/Llama-2-Onnx/7B_FT_float16/embeddings.pth \
+        --tokenizer_path tokenizer.model \
+        --prompt "What is the lightest element?"
 
-    # python run_model.py \
-    #       --onnx_file models/llama_16_block_list_1.onnx \
-    #       --embedding_file ~/github/Llama-2-Onnx/7B_FT_float16/embeddings.pth \
-    #       --tokenizer_path ~/github/Llama-2-Onnx/tokenizer.model \
-    #       --prompt "Waht is the lightest element?"
+    python run_model.py \
+        --onnx_file <chosen_submodule>/ONNX/LlamaV2_<chosen_submodule>.onnx \
+        --embedding_file <chosen_submodule>/embeddings.pth \
+        --tokenizer_path tokenizer.model \
+        --prompt "What is the lightest element?"
+
+    python run_model.py \
+        --onnx_file models/llama_16_block_list_1.onnx \
+        --embedding_file ~/github/Llama-2-Onnx/7B_FT_float16/embeddings.pth \
+        --tokenizer_path ~/github/Llama-2-Onnx/tokenizer.model \
+        --prompt "Waht is the lightest element?"
+    """

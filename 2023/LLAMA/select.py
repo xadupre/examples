@@ -4,9 +4,7 @@ from onnx_extended.tools.onnx_manipulations import select_model_inputs_outputs
 
 root = os.path.dirname(__file__)
 
-llama = (
-    "~/Llama-2-Onnx/7B_FT_float16/ONNX/LlamaV2_7B_FT_float16.onnx"
-)
+llama = "~/Llama-2-Onnx/7B_FT_float16/ONNX/LlamaV2_7B_FT_float16.onnx"
 
 print("load model")
 onx = load_model(llama, external=False)
