@@ -188,7 +188,7 @@ if __name__ == "__main__":
     python run_model.py \
         --onnx_file ~/github/Llama-2-Onnx/7B_FT_float16/ONNX/LlamaV2_7B_FT_float16.onnx \
         --embedding_file ~/github/Llama-2-Onnx/7B_FT_float16/embeddings.pth \
-        --tokenizer_path tokenizer.model \
+        --tokenizer_path ~/github/Llama-2-Onnx/tokenizer.model \
         --prompt "What is the lightest element?"
 
     python run_model.py \
