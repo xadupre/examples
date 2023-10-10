@@ -176,6 +176,65 @@ if __name__ == "__main__":
         with open(model_file, "rb") as f:
             model = pickle.load(f)
 
+    # quantize to fp8 with neuro-compressor
+    print(f"quantize with neuro-compressor")
+    if True:
+        from neural_compressor import quantization, PostTrainingQuantConfig
+
+        class Dataloader:
+            def __init__(self, dataset, total_samples=10):
+                self.batch_size = total_samples
+                self.dataset = dataset
+                self.device = torch.device("cpu")
+
+            def __len__(self):
+                return self.batch_size
+
+            def __iter__(self):
+                for p in range(self.batch_size):
+                    data = dataset[p]
+                    inputs = {
+                        "input_ids": data[0].to(self.device).reshape(1, max_seq_length),
+                        "attention_mask": data[1]
+                        .to(self.device)
+                        .reshape(1, max_seq_length),
+                        "token_type_ids": data[2]
+                        .to(self.device)
+                        .reshape(1, max_seq_length),
+                    }
+                    yield inputs
+
+        configs = [
+            (
+                "static_qdq",
+                PostTrainingQuantConfig(
+                    approach="static",
+                    quant_format="QDQ",
+                    precision="fp8_e4m3",
+                    backend="default",
+                ),
+            ),
+            (
+                "dynamic_qdq",
+                PostTrainingQuantConfig(
+                    approach="dynamic",
+                    quant_format="QDQ",
+                    precision="fp8_e4m3",
+                    backend="default",
+                ),
+            ),
+        ]
+
+        dataloader = Dataloader(dataset)
+
+        for name, config in configs:
+            print("------------------------------------------------------")
+            print(config)
+            q_model = quantization.fit(model, config, calib_dataloader=dataloader)
+            if q_model is not None:
+                print(type(q_model))
+                q_model.save(f"./_quantized/{name}")
+
     # export model
     if not os.path.exists(onnx_file):
         print(f"export model {onnx_file!r}")

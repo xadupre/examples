@@ -1,6 +1,8 @@
 # Benchmark float 8
 
-## Preparation steps
+## FP8 investigation
+
+### Preparation steps
 
 The benchmarks are implemented with
 [onnx-extended](https://github.com/sdpython/onnx-extended).
@@ -14,7 +16,7 @@ python setup.py build_ext --inplace --cuda-version=11.8 \
 export PYTHONPATH=. 
 ```
 
-## Benchmark 1: cublasLtMatMul
+### Benchmark 1: cublasLtMatMul
 
 Measure performance of cublasLtMatMul for different types and dimensions
 on two square matrices.
@@ -23,7 +25,7 @@ on two square matrices.
 python _doc/examples/plot_bench_gemm_f8.py 
 ```
 
-## Benchmark: bert-squad
+### Benchmark: bert-squad
 
 See [PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb](https://github.com/microsoft/onnxruntime/blob/main/onnxruntime/python/tools/transformers/notebooks/PyTorch_Bert-Squad_OnnxRuntime_CPU.ipynb)
 
@@ -70,7 +72,7 @@ python benchmark.py
 python profiles.py
 ```
 
-## Results Example
+### Results Example
 
 ```
 restoring dataset 'dataset.pkl'
@@ -83,3 +85,25 @@ starting benchmark 'bert-base-cased-squad-int8.onnx'
 try 1: ort inference time = 268.20 ms
 try 2: ort inference time = 265.09 ms
 ```
+
+
+## FP8 with [neural-compressor](https://github.com/intel/neural-compressor/)
+
+### Installation
+
+```bash
+git clone https://github.com/IntelLabs/FP8-Emulation-Toolkit.git
+cd FP8-Emulation-Toolkit  
+python -m pip install -e . -v
+```
+
+```bash
+git clone https://github.com/intel/neural-compressor.git
+cd neural-compressor
+git checkout fp8_adaptor
+python -m pip install -e . -v
+```
+
+### Quantization to FP8
+
+
