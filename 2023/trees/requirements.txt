@@ -1,0 +1,4 @@
+onnx-extended>=0.2.3
+psutil
+scikit-learn
+skl2onnx

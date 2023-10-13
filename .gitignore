@@ -7,3 +7,5 @@ __pycache__
 2023/f8_bert/*.pt
 2023/f8_bert/cache/*
 2023/f8_bert/data/*
+2023/trees/venv/*
+2023/trees/test_*
