@@ -8,11 +8,18 @@ It creates a small models with the same inputs and an intermediate outputs.
 python select.py
 ```
 
-## Quantization
+## Quantization with functions (dynamic)
 
-The model quantizes most of the matrix multiplication as they operator
+The model quantizes most of the matrix multiplications as they are an operator
 between an input and a fixed tensor of weights.
 
 ```bash
-bash quantize.sh
+bash quantize_with_functions.sh
+```
+
+## Quantization with QDQ
+
+
+```bash
+bash ...
 ```
