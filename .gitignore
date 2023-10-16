@@ -14,4 +14,8 @@ __pycache__
 2023/f8_bert/nc_workspace/*
 2023/f8_bert/_quantized/*
 2023/f8_bert/stat/*
+2023/LLAMA/*.csv
+2023/LLAMA/*.xlsx
 2023/LLAMA/models/*
+2023/trees/venv/*
+2023/trees/test_*
