@@ -1,4 +1,4 @@
-if True:
+if False:
     # Simple matmul to test.
     import os
     import numpy as np
@@ -81,23 +81,28 @@ if True:
         q_model = quantization.fit(model, config, calib_dataloader=dataloader)
         if q_model is not None:
             print(type(q_model))
-            q_model.save(f"./_quantized/{name}")
+            q_model.save(f"./_quantized/conf_{name}.onnx")
 
-if False:
+if True:
     # BERT
+    import os
     import pickle
     from neural_compressor import quantization, PostTrainingQuantConfig
+    from onnxruntime import InferenceSession
 
     if not os.path.exists("_quantized"):
         os.mkdir("_quantized")
 
     class Dataloader:
-        def __init__(self, dataset_file, total_samples, max_seq_length):
+        def __init__(self, model, dataset_file, total_samples, max_seq_length):
             print(f"restoring dataset {dataset_file!r}")
             with open(dataset_file, "rb") as f:
                 self.dataset = pickle.load(f)
             self.batch_size = total_samples
             self.max_seq_length = max_seq_length
+            self.sess = InferenceSession(
+                model, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+            )
 
         def __len__(self):
             return self.batch_size
@@ -113,32 +118,39 @@ if False:
                     .reshape(1, self.max_seq_length)
                     .numpy(),
                 }
-                yield ort_inputs
+                expected = self.sess.run(None, ort_inputs)
+                yield ort_inputs, expected
 
     configs = [
         (
             "static_qdq",
             PostTrainingQuantConfig(
-                approach="static", quant_format="QDQ", precision="fp8_e4m3"
+                approach="static",
+                quant_format="QDQ",
+                precision="fp8_e4m3",
+                backend="default",
             ),
         ),
         (
             "dynamic_qdq",
             PostTrainingQuantConfig(
-                approach="dynamic", quant_format="QDQ", precision="fp8_e4m3"
+                approach="dynamic",
+                quant_format="QDQ",
+                precision="fp8_e4m3",
+                backend="default",
             ),
         ),
     ]
 
     model = "bert-base-cased-squad-fp16.onnx"
-    dataloader = Dataloader("dataset.pkl", 11)
+    dataloader = Dataloader(model, "dataset.pkl", 11, max_seq_length=128)
 
     for name, config in configs:
         print("------------------------------------------------------")
         print(config)
         q_model = quantization.fit(model, config, calib_dataloader=dataloader)
-        q_model.save(f"./_quantized/{name}")
         print(type(q_model))
+        q_model.save(f"./_quantized/bert-{name}-e4m3.onnx")
 
 
 """

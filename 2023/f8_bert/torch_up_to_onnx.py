@@ -177,7 +177,7 @@ if __name__ == "__main__":
             model = pickle.load(f)
 
     # quantize to fp8 with neuro-compressor
-    print(f"quantize with neuro-compressor")
+    print("quantize with neuro-compressor")
     if True:
         from neural_compressor import quantization, PostTrainingQuantConfig
 
