@@ -100,28 +100,33 @@ def benchmark():
                 ["CUDAExecutionProvider", "CPUExecutionProvider"],
             ],
             ["0", "1"],
+            ["all", "none"],
         )
     )
     loop = tqdm(confs)
-    for name, ps, aot in loop:
+    for name, ps, aot, optim in loop:
         root = os.path.split(name)[-1]
         _, ext = os.path.splitext(root)
         if ext != ".onnx":
             continue
         opts = SessionOptions()
         opts.add_session_config_entry("session.disable_aot_function_inlining", aot)
-        opts.graph_optimization_level = GraphOptimizationLevel.ORT_DISABLE_ALL
+        if optim == "none":
+            opts.graph_optimization_level = GraphOptimizationLevel.ORT_DISABLE_ALL
+        else:
+            opts.graph_optimization_level = GraphOptimizationLevel.ORT_ENABLE_ALL
 
         obs = system_info()
         obs["name"] = name
-        obs["providers"] = ",".join(ps)
-        obs["optimization"] = (
+        obs["run-providers"] = ",".join(ps)
+        obs["run-opt"] = optim
+        obs["save-opt"] = (
             "CPU" if ".cpu." in name else ("GPU" if ".gpu." in name else "")
         )
-        obs["AOT"] = 1 if "aot1" not in name else 0
-        obs["RUN-AOT"] = 1 if aot == "0" else 0
-        obs["rewriter"] = 1 if "rewritten" in name else 0
-        obs["export"] = "dynamo" if "dynamo" in name else "script"
+        obs["save-aot"] = 1 if "aot1" not in name else 0
+        obs["run-aot"] = 1 if aot == "0" else 0
+        obs["save-rewriter"] = 1 if "rewritten" in name else 0
+        obs["save-export"] = "dynamo" if "dynamo" in name else "script"
 
         try:
             sess = InferenceSession(name, opts, providers=ps)
