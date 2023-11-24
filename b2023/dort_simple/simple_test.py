@@ -118,7 +118,7 @@ def benchmark():
         obs["optimization"] = (
             "CPU" if ".cpu." in name else ("GPU" if ".gpu." in name else "")
         )
-        obs["AOT"] = 0 if "aot1" not in name else 1
+        obs["AOT"] = 1 if "aot1" not in name else 0
         obs["RUN-AOT"] = 1 if aot == "0" else 0
         obs["rewriter"] = 1 if "rewritten" in name else 0
         obs["export"] = "dynamo" if "dynamo" in name else "script"
