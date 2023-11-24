@@ -1,4 +1,6 @@
 import os
+import platform
+import multiprocessing
 import numpy as np
 import pandas
 import onnx
@@ -72,6 +74,17 @@ def save_optimized(model_name):
         )
 
 
+def system_info():
+    obs = {}
+    obs["processor"] = platform.processor()
+    obs["cores"] = multiprocessing.cpu_count()
+    obs["cuda"] = 1 if torch.cuda.is_available() else 0
+    obs["cuda_count"] = torch.cuda.device_count()
+    obs["cuda_name"] = torch.cuda.get_device_name()
+    obs["cuda_capa"] = torch.cuda.get_device_capability()
+    return obs
+
+
 def benchmark():
     from onnxruntime import InferenceSession, SessionOptions, GraphOptimizationLevel
 
@@ -90,16 +103,21 @@ def benchmark():
             opts.add_session_config_entry("session.disable_aot_function_inlining", "1")
             opts.graph_optimization_level = GraphOptimizationLevel.ORT_DISABLE_ALL
 
+            obs = system_info()
+            obs["name"] = name
+            obs["providers"] = ",".join(ps)
+            obs["optimization"] = (
+                "CPU" if ".cpu." in name else ("GPU" if ".gpu." in name else "")
+            )
+            obs["AOT"] = 1 if "aot1" not in name else 0
+            obs["rewriter"] = 1 if "rewritten" in name else 0
+            obs["export"] = "dynamo" if "dynamo" in name else "script"
+
             try:
                 sess = InferenceSession(name, opts, providers=ps)
             except Exception as e:
                 print(f"ERROR-load: {name} {e}")
-                obs = {
-                    "name": name,
-                    "providers": ",".join(ps),
-                    "error": e,
-                    "step": "run",
-                }
+                obs.update({"error": e, "step": "run"})
                 data.append(obs)
                 continue
 
@@ -110,18 +128,11 @@ def benchmark():
                     sess.run(None, feeds)
             except Exception as e:
                 print(f"ERROR-run: {name} {e}")
-                obs = {
-                    "name": name,
-                    "providers": ",".join(ps),
-                    "error": e,
-                    "step": "load",
-                }
+                obs.update({"error": e, "step": "load"})
                 data.append(obs)
                 continue
-            obs = measure_time(lambda: sess.run(None, feeds))
+            obs.update(measure_time(lambda: sess.run(None, feeds)))
 
-            obs["name"] = name
-            obs["providers"] = ",".join(ps)
             print(f"{obs['average']} {name} {ps}")
             data.append(obs)
 
@@ -130,7 +141,7 @@ def benchmark():
     df.to_excel("benchmark.xlsx", index=False)
 
 
-if False:
+if not os.path.exists("simple_script.onnx"):
     export_utils("simple", MyModel(), torch.rand((1, 1, 128, 128), dtype=torch.float32))
     save_optimized("simple_script.onnx")
     save_optimized("simple_dynamo.onnx")

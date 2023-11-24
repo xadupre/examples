@@ -19,3 +19,6 @@ b2023/LLAMA/*.xlsx
 b2023/LLAMA/models/*
 b2023/trees/venv/*
 b2023/trees/test_*
+b2023/dort_simple/*.csv
+b2023/dort_simple/*.xlsx
+b2023/dort_simple/*.onnx
