@@ -1,3 +1,4 @@
+import itertools
 import os
 import platform
 import multiprocessing
@@ -9,6 +10,7 @@ from onnx_extended.ext_test_case import measure_time
 import torch
 from torch import nn
 import torch.nn.functional as F
+from tqdm import tqdm
 
 
 class MyModel(nn.Module):
@@ -90,51 +92,59 @@ def benchmark():
 
     shape = [1, 1, 128, 128]
     data = []
-    for name in os.listdir("."):
+    confs = list(
+        itertools.product(
+            os.listdir("."),
+            [
+                ["CPUExecutionProvider"],
+                ["CUDAExecutionProvider", "CPUExecutionProvider"],
+            ],
+            ["0", "1"],
+        )
+    )
+    loop = tqdm(confs)
+    for name, ps, aot in loop:
         root = os.path.split(name)[-1]
         _, ext = os.path.splitext(root)
         if ext != ".onnx":
             continue
-        for ps in [
-            ["CPUExecutionProvider"],
-            ["CUDAExecutionProvider", "CPUExecutionProvider"],
-        ]:
-            opts = SessionOptions()
-            opts.add_session_config_entry("session.disable_aot_function_inlining", "1")
-            opts.graph_optimization_level = GraphOptimizationLevel.ORT_DISABLE_ALL
+        opts = SessionOptions()
+        opts.add_session_config_entry("session.disable_aot_function_inlining", aot)
+        opts.graph_optimization_level = GraphOptimizationLevel.ORT_DISABLE_ALL
 
-            obs = system_info()
-            obs["name"] = name
-            obs["providers"] = ",".join(ps)
-            obs["optimization"] = (
-                "CPU" if ".cpu." in name else ("GPU" if ".gpu." in name else "")
-            )
-            obs["AOT"] = 1 if "aot1" not in name else 0
-            obs["rewriter"] = 1 if "rewritten" in name else 0
-            obs["export"] = "dynamo" if "dynamo" in name else "script"
+        obs = system_info()
+        obs["name"] = name
+        obs["providers"] = ",".join(ps)
+        obs["optimization"] = (
+            "CPU" if ".cpu." in name else ("GPU" if ".gpu." in name else "")
+        )
+        obs["AOT"] = 0 if "aot1" not in name else 1
+        obs["RUN-AOT"] = 1 if aot == "0" else 0
+        obs["rewriter"] = 1 if "rewritten" in name else 0
+        obs["export"] = "dynamo" if "dynamo" in name else "script"
 
-            try:
-                sess = InferenceSession(name, opts, providers=ps)
-            except Exception as e:
-                print(f"ERROR-load: {name} {e}")
-                obs.update({"error": e, "step": "run"})
-                data.append(obs)
-                continue
-
-            input_name = sess.get_inputs()[0].name
-            feeds = {input_name: np.random.rand(*shape).astype(np.float32)}
-            try:
-                for i in range(0, 10):
-                    sess.run(None, feeds)
-            except Exception as e:
-                print(f"ERROR-run: {name} {e}")
-                obs.update({"error": e, "step": "load"})
-                data.append(obs)
-                continue
-            obs.update(measure_time(lambda: sess.run(None, feeds)))
-
-            print(f"{obs['average']} {name} {ps}")
+        try:
+            sess = InferenceSession(name, opts, providers=ps)
+        except Exception as e:
+            loop.set_description(f"ERROR-load: {name} {e}")
+            obs.update({"error": e, "step": "run"})
             data.append(obs)
+            continue
+
+        input_name = sess.get_inputs()[0].name
+        feeds = {input_name: np.random.rand(*shape).astype(np.float32)}
+        try:
+            for i in range(0, 10):
+                sess.run(None, feeds)
+        except Exception as e:
+            loop.set_description(f"ERROR-run: {name} {e}")
+            obs.update({"error": e, "step": "load"})
+            data.append(obs)
+            continue
+        obs.update(measure_time(lambda: sess.run(None, feeds)))
+
+        loop.set_description(f"{obs['average']} {name} {ps}")
+        data.append(obs)
 
     df = pandas.DataFrame(data)
     df.to_csv("benchmark.csv", index=False)
