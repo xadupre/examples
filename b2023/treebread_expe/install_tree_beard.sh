@@ -6,6 +6,7 @@ echo "--------------------------------------------"
 python3 --version
 cmake --version
 echo "--------------------------------------------"
+# apt-get clang clang-tools libomp-dev build-essential
 # apt-get install lld ninja-build
 
 
@@ -115,6 +116,8 @@ fi
 
 popd
 
+echo "copy ./tbuild/treebeard/build/lib/*.so to ./tbuild/treebeard/src/python"
 export PATH=$OLD_PATH
 cp ./tbuild/treebeard/build/lib/*.so ./tbuild/treebeard/src/python
+ls -l ./tbuild/treebeard/src/python
 
