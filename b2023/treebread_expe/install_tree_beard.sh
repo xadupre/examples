@@ -97,8 +97,8 @@ if [[ ! -e "treebeard/build/bin/treebeard" ]]; then
         -DMLIR_DIR=$MY_VARIABLE/llvm-project/build/lib/cmake/mlir \
         -DLLVM_BUILD_DIRECTORY=$MY_VARIABLE/llvm-project/build/ \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_C_COMPILER=clang \
-        -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=gcc \
+        -DCMAKE_CXX_COMPILER=g++ \
         -DCMAKE_CXX_FLAGS="-std=c++17" \
         -DLLVM_ENABLE_LLD=ON
 
