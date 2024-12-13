@@ -5,7 +5,7 @@ import transformers
 from onnx_export_errors import bypass_export_some_errors
 
 true_model = True
-experimental = True
+experimental = False
 
 
 def get_phi35_untrained(
