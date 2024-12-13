@@ -8,7 +8,7 @@ true_model = True
 experimental = False
 
 
-def get_phi35_untrained(
+def get_phi35(
     batch_size: int = 2, true_model: bool = False, **kwargs
 ) -> Dict[str, Any]:
     """
@@ -227,7 +227,7 @@ if true_model:
     data = None
 else:
     print(f"load model true_model={true_model}...")
-    data = get_phi35_untrained(num_hidden_layers=2)
+    data = get_phi35(num_hidden_layers=2)
     print("done.")
 
     model = data["model"]
@@ -261,7 +261,7 @@ if experimental:
             # This section must be under this section to avoid creation true DynamicCache
             print(f"load model true_model={true_model}...")
             # bfloat16 not fully supported by this exporter
-            data = get_phi35_untrained(true_model=True, torch_dtype="float16")
+            data = get_phi35(true_model=True, torch_dtype="float16")
             print("done")
             model = data["model"]
             inputs = data["inputs"]
@@ -286,7 +286,7 @@ else:
         if true_model:
             # This section must be under this section to avoid creation true DynamicCache
             print(f"load model true_model={true_model}...")
-            data = get_phi35_untrained(true_model=True)
+            data = get_phi35(true_model=True)
             print("done")
             model = data["model"]
             inputs = data["inputs"]
@@ -296,6 +296,7 @@ else:
         ep = torch.onnx.export(
             model, (), kwargs=inputs, dynamic_shapes=dynamic_shapes, dynamo=True
         )
+        ep.optimize()
         print("save the model")
         ep.save(name)
 print("done.")
