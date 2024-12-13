@@ -5,7 +5,7 @@ import transformers
 from onnx_export_errors import bypass_export_some_errors
 
 true_model = True
-experimental = False
+experimental = True
 
 
 def get_phi35_untrained(
@@ -175,18 +175,22 @@ def get_phi35_untrained(
     seq_length = torch.export.Dim("seq_length")
     shapes = {}
 
+    dtype = getattr(torch, kwargs.get("torch_dtype", "bfloat16"))
+
     # You can get the cache dimension by running the model without it.
     n_layers = 32 if true_model else config["num_hidden_layers"]
     cache = transformers.cache_utils.DynamicCache(n_layers)
     for i in range(n_layers):
         cache.update(
-            torch.randn(batch_size, 32, 30, 96), torch.randn(batch_size, 32, 30, 96), i
+            torch.randn(batch_size, 32, 30, 96).to(dtype),
+            torch.randn(batch_size, 32, 30, 96).to(dtype),
+            i,
         )
     cache2 = transformers.cache_utils.DynamicCache(n_layers)
     for i in range(n_layers):
         cache2.update(
-            torch.randn(batch_size + 1, 32, 31, 96),
-            torch.randn(batch_size + 1, 32, 31, 96),
+            torch.randn(batch_size + 1, 32, 31, 96).to(dtype),
+            torch.randn(batch_size + 1, 32, 31, 96).to(dtype),
             i,
         )
 
@@ -230,11 +234,11 @@ else:
     inputs = data["inputs"]
     dynamic_shapes = data["dynamic_shapes"]
 
-###################################
-# Let's check it is working.
-# We need to copy the input before calling the model
-# because it modified the inputs and they are not properly
-# set up when the export starts.
+    ###################################
+    # Let's check it is working.
+    # We need to copy the input before calling the model
+    # because it modified the inputs and they are not properly
+    # set up when the export starts.
     if not true_model:
         # too long
         model(**copy.deepcopy(inputs))
@@ -256,7 +260,8 @@ if experimental:
         if true_model:
             # This section must be under this section to avoid creation true DynamicCache
             print(f"load model true_model={true_model}...")
-            data = get_phi35_untrained(true_model=True)
+            # bfloat16 not fully supported by this exporter
+            data = get_phi35_untrained(true_model=True, torch_dtype="float16")
             print("done")
             model = data["model"]
             inputs = data["inputs"]
