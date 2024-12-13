@@ -22,5 +22,6 @@ b2023/trees/test_*
 b2023/dort_simple/*.csv
 b2023/dort_simple/*.xlsx
 b2023/dort_simple/*.onnx
-b2024/**/*.onnx
-b2024/**/*.data
+c2024/**/*.onnx
+c2024/**/*.data
+c2024/**/*.weight
