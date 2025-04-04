@@ -666,6 +666,19 @@ class Phi4MMImageEmbedding(nn.Module):
         return image_features_proj.squeeze()
 
 
+
+class CustomSpeechVisionOp(torch.nn.Module):
+    def forward(self, x: torch.Tensor, mode: torch.Tensor) -> torch.Tensor:
+        val = torch.onnx.ops.symbolic(
+            "custom_domain::CustomVisionOp",
+            (x, mode),
+            dtype=x.dtype,
+            shape=(*x.shape[:-1], x.shape[-1] * 3),
+            version=1,
+        )
+        return val
+
+
 class Phi4MMAudioEmbedding(nn.Module):
     """Audio embedding."""
 
@@ -744,6 +757,8 @@ class Phi4MMAudioEmbedding(nn.Module):
         self.vocab_size = config.vocab_size
         self.input_embeds = None
         self.audio_embed_sizes = None
+
+        self.onnx_speech_vision = CustomSpeechVisionOp()
         
     def post_init(self, audio_config):
         # execute after the from_pretrained() initialization of the Phi4MM model
@@ -771,12 +786,48 @@ class Phi4MMAudioEmbedding(nn.Module):
         if isinstance(self.audio_projection, nn.Sequential):
             audio_set_tensor = self.audio_projection(audio_features)
         elif isinstance(self.audio_projection, nn.ModuleDict):
-            audio_set_tensor = torch.cond(
-                audio_projection_mode == torch.tensor([InputMode.SPEECH.value], device=audio_projection_mode.device).long(),
-                lambda x: self.audio_projection['speech'](x),
-                lambda x: self.audio_projection['vision'](x),
-                (audio_features,)
-            )
+            if torch.compiler.is_exporting():
+                # We replace the part which does not convert by a custom op.
+                # We then export each branch (they are submodules) and combine
+                # the three graphs into a single one.
+                # The prints helps to guess the input and output shapes to give each branch.                
+                # print("----- this print is used to see the shapes needed to export")
+                # print("-----", audio_features.dtype, audio_features.shape)
+                # +input: torch.float32 torch.Size([s35, (((s16 - 1)//8)) + 1, 1024])
+                # output: torch.float32 torch.Size([s35, (((s16 - 1)//8)) + 1, 3072])
+                # audio_set_tensor = self.audio_projection['speech'](audio_features)
+                audio_set_tensor = self.onnx_speech_vision(audio_features, audio_projection_mode)
+                # XD: I wanted to export the If but it failed as well.
+                #audio_set_tensor = torch.cond(
+                #    audio_projection_mode == torch.tensor([InputMode.SPEECH.value], device=audio_projection_mode.device).long(),
+                #    lambda x: self.audio_projection['speech'](x),
+                #    lambda x: self.audio_projection['vision'](x),
+                #    (audio_features.clone(),)
+                #), 
+            #else:
+                # XD:
+                # This code cannot be exported due to the following error:
+                # AssertionError: UnspecializedNNModuleVariable(PhiOAudioEmbedding) 
+                # is already tracked for mutation. This could be because you are not using VariableBuilder 
+                # to construct the variable tracker. Source of new object: 
+                # AttrProxySource(base=WeakRefCallSource(base=ConstDictKeySource(base=AttrSource(base=LocalSource(local_name='self',
+                # is_input=True, is_derefed_cell_contents=False), member='data'), index=0))). 
+                # Source of previously tracked object: AttrProxySource(base=LocalSource(local_name='key', is_input=True, is_derefed_cell_contents=False)).
+                # I don't know what it is. I just know both branches are exportable (and I do to export the whole model).
+                #audio_set_tensor = torch.cond(
+                #    audio_projection_mode == torch.tensor([InputMode.SPEECH.value], device=audio_projection_mode.device).long(),
+                #    lambda x: self.onnx_audio(x),
+                #    lambda x: self.onnx_vision(x),
+                #    (audio_features.clone(),)
+                #)
+            else:
+                # Original code.
+                if audio_projection_mode == torch.tensor([InputMode.SPEECH.value], device=audio_projection_mode.device).long():
+                    audio_set_tensor = self.audio_projection['speech'](x)
+                else:
+                    audio_set_tensor = self.audio_projection['vision'](x)
+
+            # print("-----", audio_set_tensor.dtype, audio_set_tensor.shape)
         else:
             raise NotImplementedError
         

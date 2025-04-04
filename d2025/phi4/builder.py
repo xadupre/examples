@@ -2,6 +2,8 @@ import json
 import argparse
 import numpy as np
 import onnx
+import onnx.helper as oh
+import onnx.numpy_helper as onh
 import onnxruntime as ort
 import onnxscript
 import os
@@ -18,6 +20,116 @@ from onnxruntime.transformers.dynamo_onnx_helper import DynamoOnnxHelper
 from onnxscript import ir
 from PIL import Image
 from transformers import AutoConfig, AutoProcessor, AutoModelForCausalLM
+
+
+def phi4_combine_models(
+    main_model: onnx.ModelProto,
+    speech: onnx.ModelProto,
+    vision: onnx.ModelProto,
+    custom_op="CustomSpeechVisionOp",
+    custom_domain="custom_domain",
+) -> onnx.ModelProto:
+    """
+    Speech and vision: have no external data.
+    The modification are made in place.
+    """
+    # onnx.checker.check_model(main_model)
+    # onnx.checker.check_model(speech)
+    # onnx.checker.check_model(vision)
+
+    nodes = [
+        (i, n) for i, n in enumerate(main_model.graph.node) if n.domain == custom_domain
+    ]
+    assert len(nodes) == 1
+    index, node_to_replace = nodes[0]
+
+    names = (
+        set(i.name for i in main_model.graph.input)
+        | set(i.name for i in main_model.graph.output)
+        | set(i.name for i in main_model.graph.initializer)
+    )
+    for n in main_model.graph.node:
+        names |= set(n.output)
+
+    # no renaming?
+    # assert not (names & set(i.name for i in speech.graph.initializer))
+    # assert not (names & set(i.name for i in vision.graph.initializer))
+    assert not (names & set(i.name for i in speech.graph.input))
+    assert not (names & set(i.name for i in vision.graph.input))
+    assert speech.graph.input[0].name == vision.graph.input[0].name
+
+    # main_model.graph.initializer.extend(speech.graph.initializer)
+    # main_model.graph.initializer.extend(vision.graph.initializer)
+    # 1: VISION, 2: SPEECH
+    main_model.graph.initializer.append(
+        onh.from_array(np.array(2, dtype=np.int64), name="CST_SPEECH")
+    )
+    nodes = list(main_model.graph.node)
+    input_name = speech.graph.input[0].name
+    del speech.graph.input[:]
+    del vision.graph.input[:]
+    speech.graph.name = "speech"
+    vision.graph.name = "vision"
+    # let's rename, onnx does not like otherwise
+    for mod, suffix in [(speech, "_speech"), (vision, "_vision")]:
+        for i in mod.graph.initializer:
+            i.name = i.name + suffix
+        for node in mod.graph.node:
+            nis = [(n + suffix if n != input_name else input_name) for n in node.input]
+            nos = [n + suffix for n in node.output]
+            del node.input[:]
+            del node.output[:]
+            node.input.extend(nis)
+            node.output.extend(nos)
+        for i in mod.graph.output:
+            i.name = i.name + suffix
+        
+
+    addition = [
+        oh.make_node("Equal", [node_to_replace.input[1], "CST_SPEECH"], ["IS_SPEECH"]),
+        oh.make_node("Identity", [node_to_replace.input[0]], [input_name]),
+        oh.make_node(
+            "If",
+            ["IS_SPEECH"],
+            node_to_replace.output,
+            then_branch=speech.graph,
+            else_branch=vision.graph,
+        ),
+    ]
+    nodes[index : index + 1] = addition
+    del main_model.graph.node[:]
+    main_model.graph.node.extend(nodes)
+
+
+def phi4_combine_models_files(
+    main_model: str,
+    speech: str,
+    vision: str,
+    output: str,
+    custom_op="CustomSpeechVisionOp",
+    custom_domain="custom_domain",
+):
+    print(f"-- load {main_model!r}")
+    main_model = onnx.load(main_model, load_external_data=True)
+    print(f"-- load {speech!r}")
+    speech = onnx.load(speech, load_external_data=True)
+    print(f"-- load {vision!r}")
+    vision = onnx.load(vision, load_external_data=True)
+    onnx.checker.check_model(main_model)
+    onnx.checker.check_model(speech)
+    onnx.checker.check_model(vision)
+    phi4_combine_models(
+        main_model, speech, vision, custom_op=custom_op, custom_domain=custom_domain
+    )
+    print(f"-- save {output!r}")
+    onnx.checker.check_model(main_model)
+    onnx.save(
+        main_model,
+        output,
+        all_tensors_to_one_file=True,
+        save_as_external_data=True,
+        location=os.path.split(output)[-1] + ".data",
+    )
 
 
 def build_vision(args):
@@ -168,6 +280,30 @@ def build_speech(args):
 
     fpath_1 = os.path.join(temp_folder_1, filename)
     torch._dynamo.config.capture_scalar_outputs = True
+
+    print("-- torch.export.export -- speech")
+    ep = torch.onnx.export(
+        model.model.embed_tokens_extend.audio_embed.audio_projection['speech'],
+        args=(torch.rand((16, 32, 1024), dtype=dummy_inputs[0].dtype, device=dummy_inputs[0].device),),
+        dynamic_shapes=({0:"A", 1:"B"},),
+        dynamo=True,
+    )
+    ep.optimize()
+    ep.save(fpath_1 + ".speech.onnx")
+    print("-- torch.export.export -- vision")
+    ep = torch.onnx.export(
+        model.model.embed_tokens_extend.audio_embed.audio_projection['vision'],
+        args=(torch.rand((16, 32, 1024), dtype=dummy_inputs[0].dtype, device=dummy_inputs[0].device),),
+        dynamic_shapes=({0:"A", 1:"B"},),
+        dynamo=True,
+    )
+    ep.optimize()
+    ep.save(fpath_1 + ".vision.onnx")
+    # 
+    # model.model.embed_tokens_extend.audio_embed.audio_projection['vision']
+
+
+    print("-- torch.export.export...")
     ep = torch.export.export(
         model.model.embed_tokens_extend.audio_embed,
         args=dummy_inputs,
@@ -183,6 +319,7 @@ def build_speech(args):
             {0: torch.export.Dim.AUTO},
         ],
     )
+    print("-- torch.onnx.export...")
     onnx_program = torch.onnx.export(
         ep,
         (),
@@ -194,8 +331,15 @@ def build_speech(args):
         ],
         output_names=["audio_features"],
     )
+    print("-- optimize...")
     onnx_program.optimize()
-    onnx_program.save(fpath_1, external_data=True)
+    print(f"-- save in {fpath_1!r}...")
+    onnx_program.save(fpath_1 + ".main", external_data=True)
+    print("-- done.")
+
+    print("-- merging")
+    phi4_combine_models_files(fpath_1 + ".main", fpath_1 + ".speech.onnx", fpath_1 + ".vision.onnx", fpath_1)
+    print("-- done")
 
     onnx.checker.check_model(fpath_1)
     onnx.shape_inference.infer_shapes_path(fpath_1)
@@ -214,7 +358,7 @@ def build_speech(args):
         size_threshold=0,
         convert_attribute=False,
     )
-    shutil.rmtree(temp_folder_1)
+    # shutil.rmtree(temp_folder_1)
 
     # ONNX/ORT rewriter
     temp_folder_3 = os.path.join(args.output, "speech_after_rewrite")
@@ -232,7 +376,7 @@ def build_speech(args):
 
     fpath_3 = os.path.join(temp_folder_3, filename)
     ir.save(onnx_model, fpath_3, external_data=f"{filename}.data")
-    shutil.rmtree(temp_folder_2)
+    # shutil.rmtree(temp_folder_2)
 
     onnx_model = onnx.load_model(fpath_3, load_external_data=True)
     # Fix labels of dynamic axes since they can't be specified during Dynamo export currently
@@ -283,7 +427,7 @@ def build_speech(args):
             "--convert_attribute",
         ]
     )
-    shutil.rmtree(temp_folder_3)
+    # shutil.rmtree(temp_folder_3)
 
     # ORT 4-bits quantizer
     fpath_5 = os.path.join(args.output, filename)
@@ -757,6 +901,13 @@ def get_args():
 
 
 if __name__ == "__main__":
+    if False:
+        phi4_combine_models_files(
+            "/home/xadupre/github/examples/d2025/phi4/output/speech_init_export/phi-4-mm-speech.onnx.main",
+            "/home/xadupre/github/examples/d2025/phi4/output/speech_init_export/phi-4-mm-speech.onnx.speech.onnx",
+            "/home/xadupre/github/examples/d2025/phi4/output/speech_init_export/phi-4-mm-speech.onnx.vision.onnx",
+            "/home/xadupre/github/examples/d2025/phi4/output/speech_init_export/phi-4-mm-speech.final.onnx",
+        )
     # clear&&python builder.py -i ./phio -o ./output -e cpu -p fp16
     from phio.configuration_phi4mm import Phi4MMConfig
     from phio.modeling_phi4mm import Phi4MMForCausalLM
@@ -766,22 +917,28 @@ if __name__ == "__main__":
     assistant_prompt = "<|assistant|>\n"
     prompt_suffix = "<|end|>\n"
 
+    print("-- creates a dummy model")
     args = get_args()
     config = AutoConfig.from_pretrained(args.input, trust_remote_code=True)
     processor = AutoProcessor.from_pretrained(args.input, trust_remote_code=True)
-    #model = AutoModelForCausalLM.from_pretrained(
-    #    args.input, trust_remote_code=True, torch_dtype=args.precision
-    #).to(args.execution_provider.replace("dml", "cuda"))
-    config_filename = os.path.join(os.path.dirname(__file__), "phi", "config.json")
-    with open(config_filename) as f:
-        config = json.load(f)
 
-    config["num_hidden_layers"] = 2
-    config["_attn_implementation"] = "eager"
-    conf = Phi4MMConfig(**config)
-    model = Phi4MMForCausalLM(conf)
-    model.eval()
+    if False:  # for the whole model
+        model = AutoModelForCausalLM.from_pretrained(
+            args.input, trust_remote_code=True, torch_dtype=args.precision
+        ).to(args.execution_provider.replace("dml", "cuda"))
+    else:
+        # A dummy model smaller for fast iteration.
+        config_filename = os.path.join(os.path.dirname(__file__), "phi", "config.json")
+        with open(config_filename) as f:
+            config = json.load(f)
 
+        config["num_hidden_layers"] = 2
+        config["_attn_implementation"] = "eager"
+        conf = Phi4MMConfig(**config)
+        model = Phi4MMForCausalLM(conf)
+        model.eval()
+
+    print("-- exports...")
 
     # Build model components
     #build_vision(args)
