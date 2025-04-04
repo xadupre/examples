@@ -7,6 +7,7 @@ import transformers
 from onnx_diagnostic.helpers import string_type
 from phi.configuration_phi4mm import Phi4MMConfig
 from phi.modeling_phi4mm import Phi4MMForCausalLM
+from phi.processing_phi4mm import InputMode
 
 
 def export_speech(
@@ -53,8 +54,8 @@ def export_speech(
         inputs["audio_embed_sizes"],  # audio_sizes: torch.LongTensor
         inputs["input_mode"],  # audio_projection_mode: int
     )
-    print("-- checks the model runs")
-    expected = model(**dummy_inputs)
+    print(f"-- runs the model with {string_type(dummy_inputs, with_shape=True)}")
+    expected = model.model.embed_tokens_extend.audio_embed(*dummy_inputs, wte=model.model.embed_tokens)
 
     dynamic_axes = {
         "audio_embeds": {0: "num_audios", 1: "num_frames", 2: "feature_size"},
@@ -81,6 +82,7 @@ def export_speech(
     ep = torch.export.export(
         model.model.embed_tokens_extend.audio_embed,
         args=dummy_inputs,
+        kwargs=dict(wte=model.model.embed_tokens),
         strict=False,
         dynamic_shapes=export_ds,
     )

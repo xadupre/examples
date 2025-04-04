@@ -1,3 +1,4 @@
+import json
 import argparse
 import numpy as np
 import onnx
@@ -756,6 +757,11 @@ def get_args():
 
 
 if __name__ == "__main__":
+    # clear&&python builder.py -i ./phio -o ./output -e cpu -p fp16
+    from phio.configuration_phi4mm import Phi4MMConfig
+    from phio.modeling_phi4mm import Phi4MMForCausalLM
+    from phio.processing_phi4mm import InputMode    
+
     user_prompt = "<|user|>\n"
     assistant_prompt = "<|assistant|>\n"
     prompt_suffix = "<|end|>\n"
@@ -763,13 +769,23 @@ if __name__ == "__main__":
     args = get_args()
     config = AutoConfig.from_pretrained(args.input, trust_remote_code=True)
     processor = AutoProcessor.from_pretrained(args.input, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.input, trust_remote_code=True, torch_dtype=args.precision
-    ).to(args.execution_provider.replace("dml", "cuda"))
+    #model = AutoModelForCausalLM.from_pretrained(
+    #    args.input, trust_remote_code=True, torch_dtype=args.precision
+    #).to(args.execution_provider.replace("dml", "cuda"))
+    config_filename = os.path.join(os.path.dirname(__file__), "phi", "config.json")
+    with open(config_filename) as f:
+        config = json.load(f)
+
+    config["num_hidden_layers"] = 2
+    config["_attn_implementation"] = "eager"
+    conf = Phi4MMConfig(**config)
+    model = Phi4MMForCausalLM(conf)
+    model.eval()
+
 
     # Build model components
-    build_vision(args)
+    #build_vision(args)
     build_speech(args)
-    build_embedding(args)
-    build_text(args)
-    build_adapters(args)
+    #build_embedding(args)
+    #build_text(args)
+    #build_adapters(args)
