@@ -53,6 +53,9 @@ def export_speech(
         inputs["audio_embed_sizes"],  # audio_sizes: torch.LongTensor
         inputs["input_mode"],  # audio_projection_mode: int
     )
+    print("-- checks the model runs")
+    expected = model(**dummy_inputs)
+
     dynamic_axes = {
         "audio_embeds": {0: "num_audios", 1: "num_frames", 2: "feature_size"},
         "audio_attention_mask": {0: "num_audios", 1: "num_frames"},
@@ -60,10 +63,6 @@ def export_speech(
         "audio_features": {0: "num_audio_tokens"},
     }
 
-    temp_folder_1 = os.path.join(output, "speech_init_export")
-    os.makedirs(temp_folder_1, exist_ok=True)
-
-    fpath_1 = os.path.join(temp_folder_1, filename)
     torch._dynamo.config.capture_scalar_outputs = True
 
     print(f"-- exporting with {string_type(dummy_inputs, with_shape=True)}")
@@ -85,6 +84,11 @@ def export_speech(
         strict=False,
         dynamic_shapes=export_ds,
     )
+
+    os.makedirs(output, exist_ok=True)
+    with open(os.path.join(output, filename + ".ep"), "w") as f:
+        f.write(str(ep))
+
     onnx_program = torch.onnx.export(
         ep,
         (),
@@ -97,6 +101,7 @@ def export_speech(
         output_names=["audio_features"],
     )
     onnx_program.optimize()
+    fpath_1 = os.path.join(output, filename)
     onnx_program.save(fpath_1, external_data=True)
 
 
@@ -109,4 +114,5 @@ if __name__ == "__main__":
     config["_attn_implementation"] = "eager"
     conf = Phi4MMConfig(**config)
     model = Phi4MMForCausalLM(conf)
+    model.eval()
     export_speech(model)
